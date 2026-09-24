@@ -4,7 +4,24 @@
 exploration of low-cost online booking for barbershops, built on Cloudflare
 Workers + D1 (Hono, TypeScript, zero build step for the frontend).
 
-## Shop facts (fetched live 2026-09-24)
+## Live deployment
+
+- Site: <https://closer-shave-booking-demo.barkleesanders.workers.dev>
+- Repo: <https://github.com/barkleesanders/closer-shave-booking-demo>
+- Worker: `closer-shave-booking-demo` · D1: `closer-shave-booking`
+  (`df548d2e-32f8-43c6-9330-ce913c712caa`)
+- Reminders cron: `*/30 * * * *` (scheduled handler in `src/index.ts`,
+  `src/reminders.ts`)
+- Email: demo mode — no `RESEND_API_KEY` configured, so confirmations log to
+  the console instead of sending.
+- Admin (`/admin`): HTTP Basic auth via `ADMIN_KEY` wrangler secret.
+- E2E verified live 2026-09-24: TEST booking `CSH-AB9Z9T` created (303),
+  duplicate slot attempt rejected (409), rescheduled 10:30 AM → 10:45 AM
+  (303, confirmed on the ticket page and in D1), cancelled (200, D1 status
+  `cancelled`). Exactly one confirmed row existed for the slot — the atomic
+  single-statement insert held.
+
+## Shop facts (re-verified live 2026-09-24)
 
 - The Closer Shave · 411A Brannan St, San Francisco, CA 94107 · (415) 465-5915
 - Barber: `itsrjstyles` (Ricky)
@@ -17,6 +34,15 @@ Workers + D1 (Hono, TypeScript, zero build step for the frontend).
 - Ratings: Booksy 5.0 (319 shop / 96 barber reviews), NxCut 4.5 (439)
 - Individual Booksy review text is JS-rendered and isn't statically
   retrievable; the site links to the live listings instead of quoting them.
+  (Re-verified 2026-09-24: the shop listing's static render shows
+  "No Reviews Yet..." for review text while still reporting 5.0 / 319 reviews
+  in aggregate.)
+- Data nuance (found during verification, not yet changed): the demo's
+  availability grid uses the SHOP listing hours, but the BARBER listing
+  (itsrjstyles) shows narrower hours — Sun/Sat 12:00–17:00, Tue/Fri
+  12:00–20:00, Thu 12:00–20:30. Since booking is with the barber, per-barber
+  hours would be more accurate; the seed currently uses shop hours. Open
+  decision for the shop owner.
 - Photos hotlink the shop's public Booksy CDN images, attributed on-page.
 
 Do not contact the shop. No real branding assets beyond the factual name,
