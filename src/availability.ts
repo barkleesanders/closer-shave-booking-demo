@@ -113,6 +113,22 @@ function parseDateStr(dateStr: string): { year: number; month: number; day: numb
   return { year, month, day };
 }
 
+/**
+ * UTC epoch bounds for a shop-local calendar day: [local 00:00, next local 00:00).
+ * Bookings are stored as UTC instants, so the busy-range query for a date must
+ * use shop-local midnight — a UTC-midnight window can miss evening bookings
+ * (e.g. 7pm PDT = 02:00 UTC the next day).
+ */
+export function localDayBounds(dateStr: string): { start: number; end: number } | null {
+  const p = parseDateStr(dateStr);
+  if (!p) return null;
+  const start = wallToUtc(p.year, p.month, p.day, 0, 0);
+  // Next local midnight: add 24h to the wall clock, then convert (DST-safe).
+  const next = new Date(Date.UTC(p.year, p.month - 1, p.day) + 24 * 60 * 60 * 1000);
+  const end = wallToUtc(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), 0, 0);
+  return { start, end };
+}
+
 export interface BusyRange {
   start_ts: number;
   end_ts: number;

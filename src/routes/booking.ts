@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import {
   generateSlotsForDate,
   isDateInWindow,
+  localDayBounds,
   nextBookableDates,
 } from '../availability';
 import {
@@ -97,9 +98,9 @@ bookingRoutes.get('/api/slots', async (c) => {
   if (!service) return c.json({ error: 'Unknown service.' }, 400);
   if (!isDateInWindow(date, Date.now())) return c.json({ error: 'Date out of range.' }, 400);
 
-  const [y, m, d] = date.split('-').map(Number);
-  const dayStart = Date.UTC(y, m - 1, d, 0, 0, 0);
-  const busy = await listBookingsInRange(c.env.DB, dayStart, dayStart + 24 * 60 * 60 * 1000);
+  const bounds = localDayBounds(date);
+  if (!bounds) return c.json({ error: 'Invalid date.' }, 400);
+  const busy = await listBookingsInRange(c.env.DB, bounds.start, bounds.end);
   const hours = await listShopHours(c.env.DB);
   const slots = generateSlotsForDate(date, hours, service.duration_minutes, busy, Date.now());
   return c.json({ slots });
@@ -124,9 +125,9 @@ bookingRoutes.post('/api/book', async (c) => {
 
   // Server-side slot revalidation: the chosen instant must be a genuinely
   // valid slot (never trust the client).
-  const [y, m, d] = input.date.split('-').map(Number);
-  const dayStart = Date.UTC(y, m - 1, d, 0, 0, 0);
-  const busy = await listBookingsInRange(c.env.DB, dayStart, dayStart + 24 * 60 * 60 * 1000);
+  const bounds = localDayBounds(input.date);
+  if (!bounds) return c.html(bookingPage(services, dates, 'Invalid date.'), 400);
+  const busy = await listBookingsInRange(c.env.DB, bounds.start, bounds.end);
   const validStarts = new Set(
     generateSlotsForDate(input.date, hours, service.duration_minutes, busy, Date.now()).map((s) => s.startTs),
   );
@@ -227,9 +228,9 @@ bookingRoutes.post('/book/:id/reschedule', async (c) => {
   if (!service) return c.html(errorPage('Reschedule failed', 'Unknown service.'), 400);
 
   // Valid slots for the day, excluding this booking's own current window.
-  const [y, m, d] = date.split('-').map(Number);
-  const dayStart = Date.UTC(y, m - 1, d, 0, 0, 0);
-  const busy = await listBusyRangesExcluding(c.env.DB, dayStart, dayStart + 24 * 60 * 60 * 1000, id);
+  const bounds = localDayBounds(date);
+  if (!bounds) return c.html(errorPage('Reschedule failed', 'Invalid date.'), 400);
+  const busy = await listBusyRangesExcluding(c.env.DB, bounds.start, bounds.end, id);
   const validStarts = new Set(
     generateSlotsForDate(date, hours, service.duration_minutes, busy, Date.now()).map((s) => s.startTs),
   );

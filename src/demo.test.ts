@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   generateSlotsForDate,
   isDateInWindow,
+  localDayBounds,
   nextBookableDates,
   wallToUtc,
   zonedParts,
@@ -39,6 +40,20 @@ describe('zoned time helpers', () => {
     // 2026-11-01 is the fall-back Sunday; 09:00 PT must still resolve to 09:00 PT
     const ts = wallToUtc(2026, 11, 1, 9, 0);
     expect(zonedParts(ts)).toMatchObject({ month: 11, day: 1, hour: 9 });
+  });
+
+  it('localDayBounds covers a shop-local day, not a UTC day', () => {
+    // 2026-09-25 19:00 PT = 2026-09-26 02:00 UTC — a UTC-midnight window for
+    // 2026-09-25 would miss it; the shop-local window must contain it.
+    const bounds = localDayBounds('2026-09-25');
+    expect(bounds).not.toBeNull();
+    const evening = wallToUtc(2026, 9, 25, 19, 0);
+    expect(evening).toBeGreaterThanOrEqual(bounds!.start);
+    expect(evening).toBeLessThan(bounds!.end);
+    // Exactly 24h wide, start is local midnight
+    expect(bounds!.end - bounds!.start).toBe(24 * 60 * 60 * 1000);
+    expect(zonedParts(bounds!.start)).toMatchObject({ month: 9, day: 25, hour: 0, minute: 0 });
+    expect(localDayBounds('2026-02-30')).toBeNull();
   });
 });
 
