@@ -5,15 +5,37 @@ import type { Barber, Booking, DayWindow, Service, ShopHours } from './types';
 export async function listBarbers(db: D1Database): Promise<Barber[]> {
   const res = await db
     .prepare('SELECT * FROM barbers WHERE is_active = 1 ORDER BY sort_order ASC')
-    .all<Barber>();
-  return res.results ?? [];
+    .all<BarberRow>();
+  return (res.results ?? []).map(parseBarber);
 }
 
 export async function getBarberById(db: D1Database, id: string): Promise<Barber | null> {
-  return await db
+  const row = await db
     .prepare('SELECT * FROM barbers WHERE id = ?1 AND is_active = 1')
     .bind(id)
-    .first<Barber>();
+    .first<BarberRow>();
+  return row ? parseBarber(row) : null;
+}
+
+/**
+ * D1 returns gallery_images as a JSON string (or leaves it undefined when the
+ * column does not exist, e.g. a database that predates migration 0004).
+ * Parse defensively: anything that is not an array of URL strings becomes [].
+ */
+type BarberRow = Omit<Barber, 'gallery_images'> & { gallery_images?: string | null };
+
+export function parseBarber(row: BarberRow): Barber {
+  let gallery_images: string[] = [];
+  try {
+    const parsed: unknown = JSON.parse(row.gallery_images ?? '[]');
+    if (Array.isArray(parsed)) {
+      gallery_images = parsed.filter((u): u is string => typeof u === 'string' && u.length > 0);
+    }
+  } catch {
+    gallery_images = [];
+  }
+  const { gallery_images: _drop, ...rest } = row;
+  return { ...rest, gallery_images };
 }
 
 /** A barber's open windows, ordered by weekday then window (split shifts). */

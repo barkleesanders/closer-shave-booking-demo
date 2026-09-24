@@ -208,11 +208,34 @@ footer.colophon .demo-tag{color:var(--color-accent);font-weight:600;letter-spaci
 .ticket-barber{display:flex;gap:12px;align-items:center;margin-bottom:12px}
 .ticket-barber .barber-photo{width:52px;height:52px}
 
+/* ---- Selected-barber spotlight (booking step 1) ---- */
+/* Live region: re-renders on every barber selection change. min-height reserves
+   the space so the flow below never jumps when the selection changes. */
+.barber-spotlight{min-height:380px;margin-bottom:var(--space-md)}
+.spotlight-empty{display:flex;align-items:center;justify-content:center;min-height:inherit;
+  border:1px dashed var(--color-rule);border-radius:var(--radius);color:var(--color-ink-2);font-size:14px;padding:24px;text-align:center}
+.spotlight-card{display:flex;gap:16px;align-items:center;border:1px solid var(--color-rule-soft);
+  border-radius:var(--radius);background:var(--color-paper-2);padding:20px;margin-bottom:var(--space-md)}
+.spotlight-photo{width:88px;height:88px;flex:none;border-radius:50%;object-fit:cover;background:var(--color-paper-3);
+  outline:1px solid var(--color-img-outline);outline-offset:-1px}
+.spotlight-info{min-width:0}
+.spotlight-info h3{margin:0 0 4px;font-size:1.25rem;font-weight:700;line-height:1.25;text-wrap:balance}
+.spotlight-work-label{font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:var(--color-accent);
+  font-weight:600;margin:0 0 8px}
+.spotlight-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.spotlight-gallery img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--color-paper-3);
+  outline:1px solid var(--color-img-outline);outline-offset:-1px}
+/* Subtle re-render cue on selection change: opacity + translateY only, never layout. */
+@keyframes spotlight-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.spotlight-enter{animation:spotlight-in var(--dur) var(--ease-out)}
+
 @media(max-width:520px){
   .barber-grid{grid-template-columns:minmax(0,1fr)}
   .slots{grid-template-columns:repeat(2,minmax(0,1fr))}
   .gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ratings{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .barber-spotlight{min-height:470px}
+  .spotlight-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
   .stage-head h2,.section-head h2{font-size:1.3rem}
 }
 @media(prefers-reduced-motion:reduce){
@@ -290,6 +313,52 @@ const PHOTO_FALLBACK =
 /** <img> attrs shared by barber photos: lazy, no-referrer, graceful fallback. */
 export function barberPhotoImg(b: Barber, cls = 'barber-photo'): string {
   return `<img class="${cls}" src="${escapeHtml(b.photo_url)}" alt="Photo of ${escapeHtml(b.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${PHOTO_FALLBACK}'">`;
+}
+
+/**
+ * The "selected barber" detail panel shown directly under the barber picker in
+ * booking step 1. Re-rendered client-side on every selection change.
+ * Rating shown as the Booksy aggregate only — individual review text is never
+ * imported, so none is displayed here.
+ */
+export function barberSpotlightHtml(b: Barber | null): string {
+  if (!b) {
+    return '<div class="spotlight-empty"><p>Choose a barber to see their work.</p></div>';
+  }
+  const gallery = (b.gallery_images ?? [])
+    .map(
+      (src, i) =>
+        `<img src="${escapeHtml(src)}" alt="Work example ${i + 1} by ${escapeHtml(b.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${PHOTO_FALLBACK}'">`,
+    )
+    .join('\n');
+  return `<div class="spotlight-inner">
+  <div class="spotlight-card">
+    ${barberPhotoImg(b, 'spotlight-photo')}
+    <div class="spotlight-info">
+      <h3>${escapeHtml(b.name)}</h3>
+      <p class="barber-meta"><span class="stars">★</span> ${b.rating.toFixed(1)} (${b.review_count} Booksy reviews)</p>
+      <p class="barber-booksy"><a href="${escapeHtml(b.booksy_url)}" target="_blank" rel="noopener">View ${escapeHtml(b.name)} on Booksy</a></p>
+    </div>
+  </div>
+  <p class="spotlight-work-label">Their work</p>
+  <div class="spotlight-gallery">${gallery}</div>
+</div>`;
+}
+
+/** Minimal per-barber detail payload embedded in the booking page so the
+ *  spotlight can re-render instantly on selection change (no fetch). */
+export function barberDetailPayload(barbers: Barber[]): string {
+  return JSON.stringify(
+    barbers.map((b) => ({
+      id: b.id,
+      name: b.name,
+      photo_url: b.photo_url,
+      booksy_url: b.booksy_url,
+      rating: b.rating,
+      review_count: b.review_count,
+      gallery: b.gallery_images ?? [],
+    })),
+  ).replace(/</g, '\\u003c');
 }
 
 const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -432,12 +501,15 @@ export function bookingPage(
     })
     .join('\n');
 
+  const spotlightBarber = barbers.find((b) => b.id === selectedBarberId) ?? null;
+
   const body = `
 ${error ? `<div class="err" role="alert">${escapeHtml(error)}</div>` : ''}
 <form id="bookform" method="POST" action="/api/book">
 <section class="stage" aria-label="Step 1: barber">
   <div class="stage-head"><span class="stage-num" aria-hidden="true">01</span><h2>Barber</h2><span class="stage-rule" aria-hidden="true"></span></div>
   <div class="barber-grid" id="barberGrid" role="radiogroup" aria-label="Choose your barber">${barberCards}</div>
+  <div id="barberSpotlight" class="barber-spotlight" aria-live="polite" aria-label="Selected barber details">${barberSpotlightHtml(spotlightBarber)}</div>
   <p class="hint">Hours and prices are each barber's own — pick the chair you want.</p>
 </section>
 <section class="stage" aria-label="Step 2: service">
@@ -466,14 +538,38 @@ ${error ? `<div class="err" role="alert">${escapeHtml(error)}</div>` : ''}
 </form>
 ${shopInfoSections(barbers, hoursMap)}
 <script>
+var BARBER_DETAIL=${barberDetailPayload(barbers)};
+var BARBER_PHOTO_FALLBACK='${PHOTO_FALLBACK}';
+</script>
+<script>
 (function(){
   var barberGrid=document.getElementById('barberGrid'),servicesEl=document.getElementById('services'),
       datesEl=document.getElementById('dates'),slotsEl=document.getElementById('slots'),
       dateInput=document.getElementById('dateInput'),slotInput=document.getElementById('slotInput'),
-      submitBtn=document.getElementById('submitBtn');
+      submitBtn=document.getElementById('submitBtn'),spotlightEl=document.getElementById('barberSpotlight');
   function selectedBarber(){var r=document.querySelector('input[name=barber]:checked');return r?r.value:'';}
   function selectedService(){var r=document.querySelector('input[name=service]:checked');return r?r.value:'';}
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function detailFor(id){for(var i=0;i<BARBER_DETAIL.length;i++){if(BARBER_DETAIL[i].id===id)return BARBER_DETAIL[i];}return null;}
+  /* Mirrors server barberSpotlightHtml(): selected barber's photo, name,
+     Booksy aggregate rating, and work gallery. aria-live on the container
+     announces the change to screen readers. */
+  function spotlightHtml(b){
+    if(!b)return '<div class="spotlight-empty"><p>Choose a barber to see their work.</p></div>';
+    var gal=(b.gallery||[]).map(function(src,i){
+      return '<img src="'+esc(src)+'" alt="Work example '+(i+1)+' by '+esc(b.name)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=BARBER_PHOTO_FALLBACK">';
+    }).join('\n');
+    return '<div class="spotlight-inner spotlight-enter">'
+      +'<div class="spotlight-card">'
+      +'<img class="spotlight-photo" src="'+esc(b.photo_url)+'" alt="Photo of '+esc(b.name)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=BARBER_PHOTO_FALLBACK">'
+      +'<div class="spotlight-info"><h3>'+esc(b.name)+'</h3>'
+      +'<p class="barber-meta"><span class="stars">★</span> '+Number(b.rating).toFixed(1)+' ('+b.review_count+' Booksy reviews)</p>'
+      +'<p class="barber-booksy"><a href="'+esc(b.booksy_url)+'" target="_blank" rel="noopener">View '+esc(b.name)+' on Booksy</a></p>'
+      +'</div></div>'
+      +'<p class="spotlight-work-label">Their work</p>'
+      +'<div class="spotlight-gallery">'+gal+'</div></div>';
+  }
+  function renderSpotlight(){spotlightEl.innerHTML=spotlightHtml(detailFor(selectedBarber()));}
   function priceHtml(cents){return cents==null?'<span class="tbd">TBD</span>':'$'+Math.round(cents/100);}
   function serviceCard(s,checked){
     return '<label class="service"><input type="radio" name="service" value="'+esc(s.slug)+'"'+(checked?' checked':'')+'>'
@@ -534,7 +630,7 @@ ${shopInfoSections(barbers, hoursMap)}
       })
       .catch(function(){datesEl.innerHTML='<p class="hint">Could not load days. Please retry.</p>';});
   }
-  barberGrid.addEventListener('change',function(){loadServices();});
+  barberGrid.addEventListener('change',function(){renderSpotlight();loadServices();});
   datesEl.addEventListener('click',function(e){
     var b=e.target.closest('.date-btn');if(!b)return;
     datesEl.querySelectorAll('.date-btn').forEach(function(x){x.classList.remove('sel');});

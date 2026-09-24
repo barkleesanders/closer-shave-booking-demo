@@ -14,31 +14,36 @@
 DELETE FROM barber_hours;
 
 -- Upsert barbers (migration 0003 pre-inserted placeholder rows; re-running is safe).
-INSERT INTO barbers (id, name, photo_url, booksy_url, phone, rating, review_count, notes, is_active, sort_order) VALUES
+-- gallery_images: Booksy portfolio ("inspiration") images, captured 2026-09-24.
+INSERT INTO barbers (id, name, photo_url, booksy_url, phone, rating, review_count, notes, is_active, sort_order, gallery_images) VALUES
 ('jesse',
  'Jesse Marquez',
  'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1714670/biz_photo/810add172ab846ab8303ecdc5e2fd9-jesse-biz-photo-5a709c5cc9724cb2a6c61b161ffe2f-booksy.jpeg',
  'https://booksy.com/en-us/1714670_jesse_barber-shop_134715_san-francisco',
  '(925) 517-5290',
- 5.0, 37, NULL, 1, 1),
+ 5.0, 37, NULL, 1, 1,
+ '["https://d2zdpiztbgorvt.cloudfront.net/region1/us/1714670/inspiration/aabcb845c8904668b9b96ac624e954-jesse-inspiration-ea61e6a903e545c78a1c177de45718-booksy.jpeg?size=360x360","https://d2zdpiztbgorvt.cloudfront.net/region1/us/1714670/inspiration/1b8cb1d7de9443aeae187f246365f4-jesse-inspiration-1e67d543a8f44379887787d6fcde49-booksy.jpeg?size=360x360","https://d2zdpiztbgorvt.cloudfront.net/region1/us/1714670/inspiration/31a94d48ce3d405889a88da7cb2caf-jesse-inspiration-e5bda070489746338a71e527e6fe8c-booksy.jpeg?size=360x360"]'),
 ('temur',
  'Temur Gold',
  'https://d2zdpiztbgorvt.cloudfront.net/region1/us/575950/biz_photo/b054210901864806b5252ff40df54c-temurgoldclub-barbershop-biz-photo-a3d061bf12d24d23beec249a86e1cd-booksy.jpeg',
  'https://booksy.com/en-us/575950_temurgoldclub-barbershop_barber-shop_134715_san-francisco',
  '(415) 465-5915',
- 5.0, 125, 'Child-friendly · pets allowed · Wi-Fi', 1, 2),
+ 5.0, 125, 'Child-friendly · pets allowed · Wi-Fi', 1, 2,
+ '["https://d2zdpiztbgorvt.cloudfront.net/region1/us/575950/inspiration/0e7e80caf07849eaa793fa725e063f-temurgoldclub-barbershop-inspiration-a559cd4a09814862849842a5c942e687052eb9c71167-booksy.jpeg?size=360x360","https://d2zdpiztbgorvt.cloudfront.net/region1/us/575950/inspiration/508912db0d6144caab941ae20a47d5-temurgoldclub-barbershop-inspiration-49b704d9aa7242e687052eb9c71167-booksy.jpeg?size=360x360","https://d2zdpiztbgorvt.cloudfront.net/region1/us/575950/inspiration/250c759f6f8f488391aca4ec66c646-temurgoldclub-barbershop-inspiration-701e29c69c24492e827091273a6fcde49-booksy.jpeg?size=360x360"]'),
 ('juan',
  'Juan Murillo',
  'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1710466/biz_photo/a1dc378372114c75b7259cf8f1d218-your-barber-juan-biz-photo-c11c87168fd240bea89fff716d24e3-booksy.jpeg',
  'https://booksy.com/en-us/1710466_your-barber-juan_barber-shop_134715_san-francisco',
  '(415) 629-5395',
- 5.0, 61, 'Booksy: Your Barber Juan', 1, 3),
+ 5.0, 61, 'Booksy: Your Barber Juan', 1, 3,
+ '["https://d2zdpiztbgorvt.cloudfront.net/region1/us/1710466/inspiration/8f3684d97cee4ac69eff1969e8a4ef-your-barber-juan-inspiration-645d06e661244f508782212a4d41ac-booksy.jpeg?size=360x360","https://d2zdpiztbgorvt.cloudfront.net/region1/us/1710466/inspiration/eac3d5e541b6435ca1287edf2a31b5-your-barber-juan-inspiration-34ff32a00d354b7daf186daf1fb62f-booksy.jpeg?size=360x360","https://d2zdpiztbgorvt.cloudfront.net/region1/us/1710466/inspiration/b79ecfcded18407fb5a73139ffd6c9-your-barber-juan-inspiration-54be3ae7536442ed998b32e954e2cb-booksy.jpeg?size=360x360"]'),
 ('rj',
  'RJ (itsrjstyles)',
  'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/biz_photo/03ecfaee67954b75be46356faece14-itsrjstyles-biz-photo-71b76fed5ae84af1acc3900904a0df-booksy.jpeg',
  'https://booksy.com/en-us/1150634_itsrjstyles_barber-shop_134715_san-francisco',
  '(415) 965-5951',
- 5.0, 96, 'Second floor at 411A Brannan', 1, 4)
+ 5.0, 96, 'Second floor at 411A Brannan', 1, 4,
+ '["https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/1d10c08414ed471183b02bcb96b5ad-itsrjstyles-inspiration-d67b6bda229744e392a2cb499e6783-booksy.jpeg?size=360x360","https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/98ee272139164319b873565d323186-itsrjstyles-inspiration-c5b745db44c648f1b33dcef2bbbc85-booksy.jpeg?size=360x360","https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/9346377235144f4da73d2329d5233d-itsrjstyles-inspiration-fffab52c23664b8d95a76511d6a3a8-booksy.jpeg?size=360x360"]')
 ON CONFLICT (id) DO UPDATE SET
   name = excluded.name,
   photo_url = excluded.photo_url,
@@ -48,7 +53,8 @@ ON CONFLICT (id) DO UPDATE SET
   review_count = excluded.review_count,
   notes = excluded.notes,
   is_active = excluded.is_active,
-  sort_order = excluded.sort_order;
+  sort_order = excluded.sort_order,
+  gallery_images = excluded.gallery_images;
 
 -- Per-barber weekly hours. A missing weekday = closed.
 -- day_of_week: 0=Sun … 6=Sat. window_index orders split shifts (Juan, Monday).

@@ -32,6 +32,8 @@ export interface Barber {
   notes: string | null;
   is_active: number;
   sort_order: number;
+  /** Booksy portfolio ("inspiration") image URLs, parsed from the gallery_images JSON column (migration 0004). */
+  gallery_images: string[];
 }
 
 /**
