@@ -1,0 +1,29 @@
+name = "closer-shave-booking-demo"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+# Workers Logs — view with `wrangler tail` or in the Cloudflare dashboard
+[observability]
+enabled = true
+
+# Reminders: every 30 minutes the scheduled() handler sends booking
+# confirmations not yet sent and 24h SMS/email reminders via the Resend seam.
+# Email is DEMO MODE until the RESEND_API_KEY secret is set.
+[triggers]
+crons = ["*/30 * * * *"]
+
+# D1 database for services, shop hours, and bookings.
+# Created on deploy with: wrangler d1 create closer-shave-booking
+# Then replace database_id below with the ID from the output.
+[[d1_databases]]
+binding = "DB"
+database_name = "closer-shave-booking"
+database_id = "REPLACE_WITH_D1_ID"
+
+# Secrets (set via `wrangler secret put`, never committed):
+#   ADMIN_KEY      — shared secret protecting /admin (demo-grade)
+#   RESEND_API_KEY — Resend key enabling live confirmation/reminder email
+# Vars:
+#   EMAIL_FROM     — sender address once Resend is live, e.g. "The Closer Shave <bookings@example.com>"
+[vars]
+EMAIL_FROM = "The Closer Shave (demo) <demo@localhost>"
