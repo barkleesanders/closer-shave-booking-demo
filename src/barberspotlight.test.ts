@@ -115,4 +115,13 @@ describe('bookingPage spotlight wiring', () => {
     expect(html).toContain('var BARBER_DETAIL=');
     expect(html).toContain('renderSpotlight');
   });
+
+  it('embeds syntactically valid script blocks (data URI with quotes must not break JS)', () => {
+    // Regression: PHOTO_FALLBACK contains single quotes, so it must be
+    // embedded via JSON.stringify, never raw inside '...'.
+    const html = bookingPage(BARBERS, 'jesse', [], [], new Map());
+    const blocks = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const b of blocks) expect(() => new Function(b)).not.toThrow();
+  });
 });

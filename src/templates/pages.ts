@@ -539,7 +539,7 @@ ${error ? `<div class="err" role="alert">${escapeHtml(error)}</div>` : ''}
 ${shopInfoSections(barbers, hoursMap)}
 <script>
 var BARBER_DETAIL=${barberDetailPayload(barbers)};
-var BARBER_PHOTO_FALLBACK='${PHOTO_FALLBACK}';
+var BARBER_PHOTO_FALLBACK=${JSON.stringify(PHOTO_FALLBACK)};
 </script>
 <script>
 (function(){
@@ -558,7 +558,7 @@ var BARBER_PHOTO_FALLBACK='${PHOTO_FALLBACK}';
     if(!b)return '<div class="spotlight-empty"><p>Choose a barber to see their work.</p></div>';
     var gal=(b.gallery||[]).map(function(src,i){
       return '<img src="'+esc(src)+'" alt="Work example '+(i+1)+' by '+esc(b.name)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=BARBER_PHOTO_FALLBACK">';
-    }).join('\n');
+    }).join('\\n');
     return '<div class="spotlight-inner spotlight-enter">'
       +'<div class="spotlight-card">'
       +'<img class="spotlight-photo" src="'+esc(b.photo_url)+'" alt="Photo of '+esc(b.name)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=BARBER_PHOTO_FALLBACK">'
@@ -606,7 +606,7 @@ var BARBER_PHOTO_FALLBACK='${PHOTO_FALLBACK}';
       .then(function(r){return r.json();})
       .then(function(j){
         if(!j.services||!j.services.length){servicesEl.innerHTML='<p class="hint">No services listed for this barber.</p>';return;}
-        servicesEl.innerHTML=j.services.map(function(s,i){return serviceCard(s,i===0);}).join('\n');
+        servicesEl.innerHTML=j.services.map(function(s,i){return serviceCard(s,i===0);}).join('\\n');
         servicesEl.querySelectorAll('input[name=service]').forEach(function(r){r.addEventListener('change',loadSlots);});
         loadDates();
       })
@@ -624,7 +624,7 @@ var BARBER_PHOTO_FALLBACK='${PHOTO_FALLBACK}';
           var dow=dt.toLocaleDateString('en-US',{timeZone:'America/Los_Angeles',weekday:'short'});
           var label=dt.toLocaleDateString('en-US',{timeZone:'America/Los_Angeles',month:'short',day:'numeric'});
           return '<button type="button" class="date-btn'+(i===0?' sel':'')+'" data-date="'+esc(d)+'"><small>'+esc(dow)+'</small><span class="dlabel">'+esc(label)+'</span></button>';
-        }).join('\n');
+        }).join('\\n');
         dateInput.value=j.dates[0];
         loadSlots();
       })
