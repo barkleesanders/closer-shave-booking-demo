@@ -18,7 +18,7 @@ crons = ["*/30 * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "closer-shave-booking"
-database_id = "REPLACE_WITH_D1_ID"
+database_id = "df548d2e-32f8-43c6-9330-ce913c712caa"
 
 # Secrets (set via `wrangler secret put`, never committed):
 #   ADMIN_KEY      — shared secret protecting /admin (demo-grade)
