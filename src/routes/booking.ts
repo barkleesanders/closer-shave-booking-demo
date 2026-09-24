@@ -1,4 +1,5 @@
 // Public booking routes: page, slot API, booking submission, confirmation.
+// Multi-barber: every availability/booking path is scoped to one barber.
 import { Hono } from 'hono';
 import {
   generateSlotsForDate,
@@ -7,24 +8,25 @@ import {
   nextBookableDates,
 } from '../availability';
 import {
+  getBarberById,
   getBooking,
-  getServiceBySlug,
+  getServiceForBarber,
   insertBookingIfFree,
+  listAllBarberHours,
+  listBarbers,
+  listBarberHours,
   listBookingsInRange,
   listBusyRangesExcluding,
-  listServices,
-  listShopHours,
+  listServicesForBarber,
   rescheduleBooking,
 } from '../db';
 import { sendConfirmationEmail } from '../email';
 import { bookingPage, cancelledPage, confirmationPage, errorPage } from '../templates/pages';
 import type { Bindings, Service } from '../types';
 
-export const ALLOWED_BARBERS = ['itsrjstyles'];
-
 export interface BookingInput {
   serviceSlug: string;
-  barber: string;
+  barberId: string;
   date: string;
   slotStart: number;
   name: string;
@@ -38,12 +40,19 @@ export interface ValidationError {
   message: string;
 }
 
-/** Pure validation of raw form fields (no DB). Testable without D1. */
-export function validateInput(raw: Record<string, string>): { input: BookingInput; errors: ValidationError[] } {
+/**
+ * Pure validation of raw form fields (no DB). The caller passes the list of
+ * active barber ids from the database; membership against it is the only
+ * barber check here (routes re-verify the barber row itself).
+ */
+export function validateInput(
+  raw: Record<string, string>,
+  allowedBarbers: readonly string[],
+): { input: BookingInput; errors: ValidationError[] } {
   const errors: ValidationError[] = [];
   const input: BookingInput = {
     serviceSlug: (raw.service ?? '').trim(),
-    barber: (raw.barber ?? '').trim(),
+    barberId: (raw.barber ?? '').trim(),
     date: (raw.date ?? '').trim(),
     slotStart: Number(raw.slotStart),
     name: (raw.name ?? '').trim().slice(0, 80),
@@ -52,7 +61,8 @@ export function validateInput(raw: Record<string, string>): { input: BookingInpu
     notes: (raw.notes ?? '').trim().slice(0, 500),
   };
   if (!input.serviceSlug) errors.push({ field: 'service', message: 'Choose a service.' });
-  if (!ALLOWED_BARBERS.includes(input.barber)) errors.push({ field: 'barber', message: 'Unknown barber.' });
+  if (!allowedBarbers.includes(input.barberId))
+    errors.push({ field: 'barber', message: 'Choose a barber.' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) errors.push({ field: 'date', message: 'Pick a valid day.' });
   if (!Number.isFinite(input.slotStart) || input.slotStart <= 0)
     errors.push({ field: 'slotStart', message: 'Pick a time slot.' });
@@ -86,22 +96,51 @@ export function whenLabel(startTs: number, endTs: number): string {
 export const bookingRoutes = new Hono<{ Bindings: Bindings }>();
 
 bookingRoutes.get('/', async (c) => {
-  const [services, hours] = await Promise.all([listServices(c.env.DB), listShopHours(c.env.DB)]);
-  const dates = nextBookableDates(hours, Date.now());
-  return c.html(bookingPage(services, dates));
+  const [barbers, hoursMap] = await Promise.all([listBarbers(c.env.DB), listAllBarberHours(c.env.DB)]);
+  const first = barbers[0];
+  const services = first ? await listServicesForBarber(c.env.DB, first.id) : [];
+  const dates = first ? nextBookableDates(hoursMap.get(first.id) ?? [], Date.now()) : [];
+  return c.html(bookingPage(barbers, first?.id ?? '', services, dates, hoursMap));
+});
+
+/** JSON: active barbers (for the booking UI). */
+bookingRoutes.get('/api/barbers', async (c) => {
+  const barbers = await listBarbers(c.env.DB);
+  return c.json({ barbers });
+});
+
+/** JSON: services for one barber. */
+bookingRoutes.get('/api/services', async (c) => {
+  const barberId = (c.req.query('barber') ?? '').trim();
+  const barber = await getBarberById(c.env.DB, barberId);
+  if (!barber) return c.json({ error: 'Unknown barber.' }, 400);
+  const services = await listServicesForBarber(c.env.DB, barberId);
+  return c.json({ services });
+});
+
+/** JSON: bookable dates for one barber (their hours, not shop hours). */
+bookingRoutes.get('/api/dates', async (c) => {
+  const barberId = (c.req.query('barber') ?? '').trim();
+  const barber = await getBarberById(c.env.DB, barberId);
+  if (!barber) return c.json({ error: 'Unknown barber.' }, 400);
+  const hours = await listBarberHours(c.env.DB, barberId);
+  return c.json({ dates: nextBookableDates(hours, Date.now()) });
 });
 
 bookingRoutes.get('/api/slots', async (c) => {
+  const barberId = (c.req.query('barber') ?? '').trim();
   const serviceSlug = (c.req.query('service') ?? '').trim();
   const date = (c.req.query('date') ?? '').trim();
-  const service: Service | null = await getServiceBySlug(c.env.DB, serviceSlug);
+  const barber = await getBarberById(c.env.DB, barberId);
+  if (!barber) return c.json({ error: 'Unknown barber.' }, 400);
+  const service: Service | null = await getServiceForBarber(c.env.DB, barberId, serviceSlug);
   if (!service) return c.json({ error: 'Unknown service.' }, 400);
   if (!isDateInWindow(date, Date.now())) return c.json({ error: 'Date out of range.' }, 400);
 
   const bounds = localDayBounds(date);
   if (!bounds) return c.json({ error: 'Invalid date.' }, 400);
-  const busy = await listBookingsInRange(c.env.DB, bounds.start, bounds.end);
-  const hours = await listShopHours(c.env.DB);
+  const busy = await listBookingsInRange(c.env.DB, bounds.start, bounds.end, barberId);
+  const hours = await listBarberHours(c.env.DB, barberId);
   const slots = generateSlotsForDate(date, hours, service.duration_minutes, busy, Date.now());
   return c.json({ slots });
 });
@@ -111,28 +150,35 @@ bookingRoutes.post('/api/book', async (c) => {
   const raw: Record<string, string> = {};
   for (const [k, v] of Object.entries(form)) raw[k] = typeof v === 'string' ? v : '';
 
-  const { input, errors } = validateInput(raw);
-  const [services, hours] = await Promise.all([listServices(c.env.DB), listShopHours(c.env.DB)]);
-  const dates = nextBookableDates(hours, Date.now());
-  if (errors.length) {
-    return c.html(bookingPage(services, dates, errors[0].message), 400);
-  }
+  const [barbers, hoursMap] = await Promise.all([listBarbers(c.env.DB), listAllBarberHours(c.env.DB)]);
+  const barberIds = barbers.map((b) => b.id);
+  const first = barbers[0];
+  const repage = async (msg: string, status: 400 | 409) => {
+    const services = first ? await listServicesForBarber(c.env.DB, first.id) : [];
+    const dates = first ? nextBookableDates(hoursMap.get(first.id) ?? [], Date.now()) : [];
+    return c.html(bookingPage(barbers, first?.id ?? '', services, dates, hoursMap, msg), status);
+  };
 
-  const service = await getServiceBySlug(c.env.DB, input.serviceSlug);
-  if (!service) return c.html(bookingPage(services, dates, 'Unknown service.'), 400);
-  if (!isDateInWindow(input.date, Date.now()))
-    return c.html(bookingPage(services, dates, 'That day is no longer bookable.'), 400);
+  const { input, errors } = validateInput(raw, barberIds);
+  if (errors.length) return repage(errors[0].message, 400);
+
+  const barber = await getBarberById(c.env.DB, input.barberId);
+  if (!barber) return repage('Unknown barber.', 400);
+  const service = await getServiceForBarber(c.env.DB, input.barberId, input.serviceSlug);
+  if (!service) return repage('Unknown service.', 400);
+  if (!isDateInWindow(input.date, Date.now())) return repage('That day is no longer bookable.', 400);
 
   // Server-side slot revalidation: the chosen instant must be a genuinely
-  // valid slot (never trust the client).
+  // valid slot for THIS barber (never trust the client).
   const bounds = localDayBounds(input.date);
-  if (!bounds) return c.html(bookingPage(services, dates, 'Invalid date.'), 400);
-  const busy = await listBookingsInRange(c.env.DB, bounds.start, bounds.end);
+  if (!bounds) return repage('Invalid date.', 400);
+  const busy = await listBookingsInRange(c.env.DB, bounds.start, bounds.end, input.barberId);
+  const hours = await listBarberHours(c.env.DB, input.barberId);
   const validStarts = new Set(
     generateSlotsForDate(input.date, hours, service.duration_minutes, busy, Date.now()).map((s) => s.startTs),
   );
   if (!validStarts.has(input.slotStart)) {
-    return c.html(bookingPage(services, dates, 'That time was just taken or is no longer valid — pick another.'), 409);
+    return repage('That time was just taken or is no longer valid — pick another.', 409);
   }
 
   const startTs = input.slotStart;
@@ -150,7 +196,7 @@ bookingRoutes.post('/api/book', async (c) => {
       booked = await insertBookingIfFree(c.env.DB, {
         id: bookingId,
         service_id: service.id,
-        barber: input.barber,
+        barber_id: input.barberId,
         guest_name: input.name,
         guest_phone: input.phone,
         guest_email: input.email || null,
@@ -168,14 +214,14 @@ bookingRoutes.post('/api/book', async (c) => {
     return c.html(errorPage('Booking failed', 'Could not save your booking. Please try again.'), 500);
   }
   if (!booked) {
-    return c.html(bookingPage(services, dates, 'That time was just taken — pick another.'), 409);
+    return repage('That time was just taken — pick another.', 409);
   }
 
   // Confirmation email: best effort — a failed send must not fail the booking.
   const booking = await getBooking(c.env.DB, bookingId);
   if (booking?.guest_email) {
     try {
-      const result = await sendConfirmationEmail(c.env, booking, service.name, whenLabel(startTs, endTs));
+      const result = await sendConfirmationEmail(c.env, booking, service.name, whenLabel(startTs, endTs), barber.name);
       if (result.sent) {
         const { markConfirmationSent } = await import('../db');
         await markConfirmationSent(c.env.DB, bookingId);
@@ -194,17 +240,19 @@ bookingRoutes.get('/book/:id', async (c) => {
   const booking = await getBooking(c.env.DB, id);
   if (!booking || booking.status === 'cancelled')
     return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
-  const [services, hours] = await Promise.all([listServices(c.env.DB), listShopHours(c.env.DB)]);
+  const [barbers, hoursMap] = await Promise.all([listBarbers(c.env.DB), listAllBarberHours(c.env.DB)]);
+  const barber = booking.barber_id ? await getBarberById(c.env.DB, booking.barber_id) : null;
+  const services = booking.barber_id ? await listServicesForBarber(c.env.DB, booking.barber_id) : [];
   const service = services.find((s) => s.id === booking.service_id);
   const serviceName = service?.name ?? 'Appointment';
   const serviceSlug = service?.slug ?? '';
-  const dates = nextBookableDates(hours, Date.now());
+  const dates = booking.barber_id ? nextBookableDates(hoursMap.get(booking.barber_id) ?? [], Date.now()) : [];
   const emailNote = booking.confirmation_sent
     ? 'A confirmation email was sent.'
     : booking.guest_email
       ? 'Email is in demo mode (no mail key configured), so no confirmation email was sent.'
       : 'No email address was provided, so no confirmation email was sent.';
-  return c.html(confirmationPage(booking, serviceName, serviceSlug, dates, whenLabel(booking.start_ts, booking.end_ts), emailNote));
+  return c.html(confirmationPage(booking, serviceName, serviceSlug, dates, whenLabel(booking.start_ts, booking.end_ts), emailNote, barber));
 });
 
 /** Move a confirmed booking to a new day/time. Atomic single-statement move. */
@@ -212,7 +260,7 @@ bookingRoutes.post('/book/:id/reschedule', async (c) => {
   const id = c.req.param('id');
   if (!/^CSH-[A-Z0-9]{6}$/.test(id)) return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
   const booking = await getBooking(c.env.DB, id);
-  if (!booking || booking.status === 'cancelled')
+  if (!booking || booking.status === 'cancelled' || !booking.barber_id)
     return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
 
   const form = await c.req.parseBody();
@@ -223,14 +271,16 @@ bookingRoutes.post('/book/:id/reschedule', async (c) => {
   if (!Number.isFinite(slotStart) || slotStart <= 0)
     return c.html(errorPage('Reschedule failed', 'Pick a time slot.'), 400);
 
-  const [services, hours] = await Promise.all([listServices(c.env.DB), listShopHours(c.env.DB)]);
+  const services = await listServicesForBarber(c.env.DB, booking.barber_id);
   const service = services.find((s) => s.id === booking.service_id);
   if (!service) return c.html(errorPage('Reschedule failed', 'Unknown service.'), 400);
 
-  // Valid slots for the day, excluding this booking's own current window.
+  // Valid slots for the day, excluding this booking's own current window —
+  // always within the booking's barber's hours.
   const bounds = localDayBounds(date);
   if (!bounds) return c.html(errorPage('Reschedule failed', 'Invalid date.'), 400);
-  const busy = await listBusyRangesExcluding(c.env.DB, bounds.start, bounds.end, id);
+  const busy = await listBusyRangesExcluding(c.env.DB, bounds.start, bounds.end, id, booking.barber_id);
+  const hours = await listBarberHours(c.env.DB, booking.barber_id);
   const validStarts = new Set(
     generateSlotsForDate(date, hours, service.duration_minutes, busy, Date.now()).map((s) => s.startTs),
   );
@@ -239,7 +289,7 @@ bookingRoutes.post('/book/:id/reschedule', async (c) => {
   }
 
   const endTs = slotStart + service.duration_minutes * 60 * 1000;
-  const moved = await rescheduleBooking(c.env.DB, id, booking.barber, slotStart, endTs);
+  const moved = await rescheduleBooking(c.env.DB, id, booking.barber_id, slotStart, endTs);
   if (!moved) {
     return c.html(errorPage('Reschedule failed', 'That time was just taken — pick another.'), 409);
   }

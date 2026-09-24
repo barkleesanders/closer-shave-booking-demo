@@ -15,9 +15,39 @@ export interface Service {
   duration_minutes: number;
   price_cents: number | null;
   price_note: string | null;
+  barber_id: string | null;
   is_active: number;
   sort_order: number;
 }
+
+/** One barber's profile, from the barbers table. */
+export interface Barber {
+  id: string;            // stable slug: 'jesse', 'temur', 'juan', 'rj'
+  name: string;
+  photo_url: string;
+  booksy_url: string;
+  phone: string | null;
+  rating: number;
+  review_count: number;
+  notes: string | null;
+  is_active: number;
+  sort_order: number;
+}
+
+/**
+ * One open window on a weekday for a barber: { day_of_week: 0 = Sunday,
+ * open_time/close_time: "HH:MM" wall clock in SHOP_TZ }.
+ * A weekday with no windows is closed; multiple windows on one day are a
+ * split shift (e.g. Juan's Monday 12:00–17:15 + 17:45–21:00).
+ */
+export interface DayWindow {
+  day_of_week: number;
+  open_time: string;
+  close_time: string;
+}
+
+/** Canonical barber ids, seeded by seeds/barbers.sql. */
+export const BARBER_IDS = ['jesse', 'temur', 'juan', 'rj'] as const;
 
 export interface ShopHours {
   day_of_week: number; // 0 = Sunday
@@ -29,7 +59,8 @@ export interface ShopHours {
 export interface Booking {
   id: string;
   service_id: string;
-  barber: string;
+  barber: string;          // legacy display slug; kept populated, equals barber_id
+  barber_id: string | null; // FK -> barbers(id); canonical barber reference
   guest_name: string;
   guest_phone: string;
   guest_email: string | null;

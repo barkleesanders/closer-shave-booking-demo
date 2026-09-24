@@ -68,11 +68,12 @@ async function sendEmail(
 
 const SHOP_LINE = 'The Closer Shave · 411A Brannan St, San Francisco, CA 94107 · (415) 465-5915';
 
-function bookingSummary(b: Booking, serviceName: string, whenLabel: string): string {
+function bookingSummary(b: Booking, serviceName: string, whenLabel: string, barberName?: string): string {
+  const who = barberName || b.barber;
   return `<p style="font-size:16px">Hi ${esc(b.guest_name)},</p>
 <p>Your appointment at <strong>${SHOP_NAME_ESC}</strong> is confirmed:</p>
 <ul>
-  <li><strong>${esc(serviceName)}</strong> with ${esc(b.barber)}</li>
+  <li><strong>${esc(serviceName)}</strong> with ${esc(who)}</li>
   <li><strong>${esc(whenLabel)}</strong></li>
   <li>Reference: <strong>${esc(b.id)}</strong></li>
 </ul>
@@ -95,6 +96,7 @@ export async function sendConfirmationEmail(
   booking: Booking,
   serviceName: string,
   whenLabel: string,
+  barberName?: string,
 ): Promise<SendResult> {
   if (!booking.guest_email) {
     return { sent: false, demoMode: !emailEnabled(env), reason: 'no guest email on booking' };
@@ -104,7 +106,7 @@ export async function sendConfirmationEmail(
     booking.id,
     booking.guest_email,
     `Appointment confirmed — ${serviceName} on ${whenLabel}`,
-    bookingSummary(booking, serviceName, whenLabel),
+    bookingSummary(booking, serviceName, whenLabel, barberName),
   );
 }
 
@@ -113,10 +115,12 @@ export async function sendReminderEmail(
   booking: Booking,
   serviceName: string,
   whenLabel: string,
+  barberName?: string,
 ): Promise<SendResult> {
   if (!booking.guest_email) {
     return { sent: false, demoMode: !emailEnabled(env), reason: 'no guest email on booking' };
   }
+  const who = barberName || booking.barber;
   return sendEmail(
     env,
     booking.id,
@@ -125,7 +129,7 @@ export async function sendReminderEmail(
     `<p style="font-size:16px">Hi ${esc(booking.guest_name)},</p>
 <p>This is a friendly reminder of your appointment <strong>tomorrow</strong>:</p>
 <ul>
-  <li><strong>${esc(serviceName)}</strong> with ${esc(booking.barber)}</li>
+  <li><strong>${esc(serviceName)}</strong> with ${esc(who)}</li>
   <li><strong>${esc(whenLabel)}</strong></li>
   <li>Reference: <strong>${esc(booking.id)}</strong></li>
 </ul>

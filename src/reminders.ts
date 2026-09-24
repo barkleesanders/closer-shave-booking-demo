@@ -4,6 +4,7 @@
 // Email goes through the Resend seam; without RESEND_API_KEY everything is
 // demo mode (logged, not sent) — the sweep still marks nothing as sent.
 import {
+  getBarberById,
   listPendingConfirmations,
   listPendingReminders,
   markConfirmationSent,
@@ -28,6 +29,14 @@ async function serviceNameFor(env: Bindings, booking: Booking): Promise<string> 
   return row?.name ?? 'Appointment';
 }
 
+async function barberNameFor(env: Bindings, booking: Booking): Promise<string> {
+  if (booking.barber_id) {
+    const barber = await getBarberById(env.DB, booking.barber_id);
+    if (barber) return barber.name;
+  }
+  return booking.barber;
+}
+
 export async function runReminderSweep(env: Bindings): Promise<SweepResult> {
   const demoMode = !emailEnabled(env);
   const result: SweepResult = {
@@ -42,7 +51,7 @@ export async function runReminderSweep(env: Bindings): Promise<SweepResult> {
   for (const b of confirmations) {
     result.confirmationsAttempted++;
     try {
-      const r = await sendConfirmationEmail(env, b, await serviceNameFor(env, b), whenLabel(b.start_ts, b.end_ts));
+      const r = await sendConfirmationEmail(env, b, await serviceNameFor(env, b), whenLabel(b.start_ts, b.end_ts), await barberNameFor(env, b));
       if (r.sent) {
         await markConfirmationSent(env.DB, b.id);
         result.confirmationsSent++;
@@ -57,7 +66,7 @@ export async function runReminderSweep(env: Bindings): Promise<SweepResult> {
   for (const b of reminders) {
     result.remindersAttempted++;
     try {
-      const r = await sendReminderEmail(env, b, await serviceNameFor(env, b), whenLabel(b.start_ts, b.end_ts));
+      const r = await sendReminderEmail(env, b, await serviceNameFor(env, b), whenLabel(b.start_ts, b.end_ts), await barberNameFor(env, b));
       if (r.sent) {
         await markReminderSent(env.DB, b.id);
         result.remindersSent++;

@@ -8,6 +8,7 @@ import {
   MIN_LEAD_MINUTES,
   SHOP_TZ,
   SLOT_STRIDE_MINUTES,
+  type DayWindow,
   type ShopHours,
   type Slot,
 } from './types';
@@ -64,12 +65,16 @@ export function wallToUtc(
   hour: number,
   minute: number,
 ): number {
-  let guess = Date.UTC(year, month - 1, day, hour, minute, 0);
+  // Wall-clock target as a monotonic number line: Date.UTC on the tuple as
+  // if it were UTC. Differences on this line are exact wall-clock minutes,
+  // so the iteration cannot confuse the 1st of a month with the 30th of
+  // the previous one (the old day-of-month-only comparison did exactly that).
+  const targetWall = Date.UTC(year, month - 1, day, hour, minute, 0);
+  let guess = targetWall;
   for (let i = 0; i < 3; i++) {
     const p = zonedParts(guess);
-    const targetMin = day * 24 * 60 + hour * 60 + minute;
-    const actualMin = p.day * 24 * 60 + p.hour * 60 + p.minute;
-    const diffMin = targetMin - actualMin;
+    const actualWall = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, 0);
+    const diffMin = (targetWall - actualWall) / 60000;
     if (diffMin === 0) break;
     guess += diffMin * 60 * 1000;
   }
@@ -139,13 +144,25 @@ function overlaps(aStart: number, aEnd: number, busy: BusyRange[]): boolean {
 }
 
 /**
- * Generate bookable slots for one date (YYYY-MM-DD in shop tz).
- * A slot is valid when it fits inside shop hours, starts after the minimum
+ * Legacy helper: collapse single-window-per-day ShopHours into DayWindows.
+ * Kept for tests and for any caller that still works with shop_hours rows.
+ */
+export function shopHoursToWindows(hours: ShopHours[]): DayWindow[] {
+  return hours
+    .filter((h) => !h.is_closed)
+    .map((h) => ({ day_of_week: h.day_of_week, open_time: h.open_time, close_time: h.close_time }));
+}
+
+/**
+ * Generate bookable slots for one date (YYYY-MM-DD in shop tz) from the
+ * barber's open windows. Multiple windows on the same day (split shifts)
+ * are all scanned; a day with no windows is closed.
+ * A slot is valid when it fits inside a window, starts after the minimum
  * lead time, is within the booking window, and doesn't overlap a booking.
  */
 export function generateSlotsForDate(
   dateStr: string,
-  hours: ShopHours[],
+  windows: DayWindow[],
   durationMinutes: number,
   busy: BusyRange[],
   nowTs: number,
@@ -155,14 +172,8 @@ export function generateSlotsForDate(
 
   const dayStartUtc = wallToUtc(d.year, d.month, d.day, 0, 0);
   const weekday = zonedParts(dayStartUtc).weekday;
-  const rule = hours.find((h) => h.day_of_week === weekday);
-  if (!rule || rule.is_closed) return [];
-
-  const { h: openH, m: openM } = parseTime(rule.open_time);
-  const { h: closeH, m: closeM } = parseTime(rule.close_time);
-  const openUtc = wallToUtc(d.year, d.month, d.day, openH, openM);
-  const closeUtc = wallToUtc(d.year, d.month, d.day, closeH, closeM);
-  if (closeUtc <= openUtc) return [];
+  const dayWindows = windows.filter((w) => w.day_of_week === weekday);
+  if (!dayWindows.length) return [];
 
   const leadCutoff = nowTs + MIN_LEAD_MINUTES * 60 * 1000;
   const windowEnd = nowTs + BOOKING_DAYS_AHEAD * 24 * 60 * 60 * 1000;
@@ -170,24 +181,35 @@ export function generateSlotsForDate(
   const durationMs = durationMinutes * 60 * 1000;
 
   const slots: Slot[] = [];
-  for (let start = openUtc; start + durationMs <= closeUtc; start += strideMs) {
-    const end = start + durationMs;
-    if (start < leadCutoff) continue;
-    if (start > windowEnd) continue;
-    if (overlaps(start, end, busy)) continue;
-    slots.push({
-      startTs: start,
-      endTs: end,
-      startLabel: timeLabelFmt.format(new Date(start)),
-      endLabel: timeLabelFmt.format(new Date(end)),
-      dateLabel: dateLabelFmt.format(new Date(start)),
-    });
+  const seen = new Set<number>(); // dedupe overlapping windows defensively
+  for (const w of dayWindows) {
+    const { h: openH, m: openM } = parseTime(w.open_time);
+    const { h: closeH, m: closeM } = parseTime(w.close_time);
+    const openUtc = wallToUtc(d.year, d.month, d.day, openH, openM);
+    const closeUtc = wallToUtc(d.year, d.month, d.day, closeH, closeM);
+    if (closeUtc <= openUtc) continue;
+    for (let start = openUtc; start + durationMs <= closeUtc; start += strideMs) {
+      if (seen.has(start)) continue;
+      const end = start + durationMs;
+      if (start < leadCutoff) continue;
+      if (start > windowEnd) continue;
+      if (overlaps(start, end, busy)) continue;
+      seen.add(start);
+      slots.push({
+        startTs: start,
+        endTs: end,
+        startLabel: timeLabelFmt.format(new Date(start)),
+        endLabel: timeLabelFmt.format(new Date(end)),
+        dateLabel: dateLabelFmt.format(new Date(start)),
+      });
+    }
   }
+  slots.sort((a, b) => a.startTs - b.startTs);
   return slots;
 }
 
-/** Next N bookable dates (YYYY-MM-DD in shop tz) that aren't fully closed. */
-export function nextBookableDates(hours: ShopHours[], nowTs: number, count = BOOKING_DAYS_AHEAD): string[] {
+/** Next N bookable dates (YYYY-MM-DD in shop tz) that have at least one window. */
+export function nextBookableDates(windows: DayWindow[], nowTs: number, count = BOOKING_DAYS_AHEAD): string[] {
   const today = zonedParts(nowTs);
   const dates: string[] = [];
   for (let i = 0; dates.length < count && i < count + 7; i++) {
@@ -204,8 +226,7 @@ export function nextBookableDates(hours: ShopHours[], nowTs: number, count = BOO
     );
     const p = zonedParts(noon);
     const weekday = p.weekday;
-    const rule = hours.find((h) => h.day_of_week === weekday);
-    if (rule && !rule.is_closed) {
+    if (windows.some((w) => w.day_of_week === weekday)) {
       const y = String(p.year).padStart(4, '0');
       const mo = String(p.month).padStart(2, '0');
       const da = String(p.day).padStart(2, '0');

@@ -6,9 +6,10 @@ import {
   SHOP_NAME,
   SHOP_PHONE,
   SHOP_PHONE_LINK,
+  type Barber,
   type Booking,
+  type DayWindow,
   type Service,
-  type ShopHours,
 } from '../types';
 
 const FAVICON =
@@ -183,7 +184,32 @@ footer.colophon{margin-top:var(--space-2xl);border-top:1px solid var(--color-rul
   color:var(--color-ink-2);font-size:12px;display:flex;flex-wrap:wrap;gap:4px 16px;justify-content:center;text-align:center}
 footer.colophon .demo-tag{color:var(--color-accent);font-weight:600;letter-spacing:0.1em;text-transform:uppercase;font-size:11px}
 
+/* ---- Barber cards (multi-barber roster) ---- */
+.barber-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:var(--space-md)}
+.barber-card{border:1px solid var(--color-rule-soft);border-radius:var(--radius);background:var(--color-paper-2);
+  padding:14px;cursor:pointer;display:block;
+  transition-property:border-color,background-color;transition-duration:var(--dur);transition-timing-function:var(--ease-out)}
+.barber-card:hover{border-color:var(--color-rule)}
+.barber-card:has(input:checked){border-color:var(--color-accent);background:var(--color-selected)}
+.barber-card input{position:absolute;opacity:0;pointer-events:none}
+.barber-top{display:flex;gap:12px;align-items:center}
+.barber-photo{width:64px;height:64px;flex:none;border-radius:50%;object-fit:cover;background:var(--color-paper-3);
+  outline:1px solid var(--color-img-outline);outline-offset:-1px}
+.barber-name{font-weight:700;font-size:16px;line-height:1.3}
+.barber-meta{color:var(--color-ink-2);font-size:12.5px;margin-top:2px}
+.barber-meta .stars{color:var(--color-accent);font-weight:600}
+.barber-hours{margin:10px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--color-ink-2)}
+.barber-hours li{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.barber-hours .dow{letter-spacing:0.04em}
+.barber-booksy{font-size:12.5px;margin-top:8px}
+.barber-profile{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--color-rule-soft);border-radius:var(--radius);
+  background:var(--color-paper-2);padding:16px;margin-bottom:12px}
+.barber-profile .barber-photo{width:88px;height:88px}
+.ticket-barber{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.ticket-barber .barber-photo{width:52px;height:52px}
+
 @media(max-width:520px){
+  .barber-grid{grid-template-columns:minmax(0,1fr)}
   .slots{grid-template-columns:repeat(2,minmax(0,1fr))}
   .gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ratings{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -219,7 +245,7 @@ ${FONTS}
 <header class="masthead">
   <h1 class="nameplate">${escapeHtml(SHOP_NAME)}</h1>
   <div class="dateline"><span>${escapeHtml(SHOP_ADDRESS)}</span><a class="phone" href="tel:${SHOP_PHONE_LINK}">${escapeHtml(SHOP_PHONE)}</a></div>
-  <nav class="section-nav" aria-label="Page sections"><a href="#bookform">Book</a><a href="#ratings">Ratings</a><a href="#photos">Photos</a><a href="#about">About</a></nav>
+  <nav class="section-nav" aria-label="Page sections"><a href="#bookform">Book</a><a href="#barbers">Barbers</a><a href="#ratings">Ratings</a><a href="#photos">Photos</a><a href="#about">About</a></nav>
 </header>
 <main>
 ${body}
@@ -258,9 +284,53 @@ const SHOP_SITE_URL = 'https://theclosershavesf.com';
 const YELP_URL = 'https://www.yelp.com/biz/the-closer-shave-san-francisco-3';
 const NXCUT_URL = 'https://www.nxcut.com/salons/us/the-closer-shave';
 
+const PHOTO_FALLBACK =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzQwNDAzOCIvPjx0ZXh0IHg9IjUwIiB5PSI2NCIgZm9udC1zaXplPSI0NCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI2M5YjY3OSI+4p2kPC90ZXh0Pjwvc3ZnPg==';
+
+/** <img> attrs shared by barber photos: lazy, no-referrer, graceful fallback. */
+export function barberPhotoImg(b: Barber, cls = 'barber-photo'): string {
+  return `<img class="${cls}" src="${escapeHtml(b.photo_url)}" alt="Photo of ${escapeHtml(b.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${PHOTO_FALLBACK}'">`;
+}
+
+const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** "14:00" -> "2:00 PM" */
+function fmtTime(t: string): string {
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+/** Compact per-barber hours for cards: "Tue 12:00 PM – 7:00 PM" lines, split shifts joined. */
+export function hoursListHtml(windows: DayWindow[]): string {
+  const items: string[] = [];
+  for (let dow = 0; dow < 7; dow++) {
+    const day = windows.filter((w) => w.day_of_week === dow);
+    if (!day.length) continue;
+    const ranges = day.map((w) => `${fmtTime(w.open_time)} – ${fmtTime(w.close_time)}`).join(', ');
+    items.push(`<li><span class="dow">${DOW_SHORT[dow]}</span><span>${ranges}</span></li>`);
+  }
+  return items.length ? `<ul class="barber-hours" aria-label="Hours">${items.join('')}</ul>` : '<p class="hint">Hours not listed.</p>';
+}
+
 /** Real shop content, fetched live 2026-09-24. Ratings link out to the
  *  live listings; individual Booksy reviews render on booksy.com. */
-function shopInfoSections(): string {
+function shopInfoSections(barbers: Barber[], hoursMap: Map<string, DayWindow[]>): string {
+  const roster = barbers
+    .map(
+      (b) => `<article class="barber-profile">
+  ${barberPhotoImg(b)}
+  <div style="min-width:0">
+    <h3 style="margin:0 0 2px">${escapeHtml(b.name)}</h3>
+    <p class="barber-meta" style="margin:0 0 8px"><span class="stars">★ ${b.rating.toFixed(1)}</span> · ${b.review_count} Booksy reviews${b.phone ? ` · <a href="tel:+1${escapeHtml(b.phone.replace(/\D/g, ''))}">${escapeHtml(b.phone)}</a>` : ''}${b.notes ? ` · ${escapeHtml(b.notes)}` : ''}</p>
+    ${hoursListHtml(hoursMap.get(b.id) ?? [])}
+    <p class="barber-booksy"><a href="${escapeHtml(b.booksy_url)}" target="_blank" rel="noopener">View ${escapeHtml(b.name)} on Booksy</a></p>
+  </div>
+</article>`,
+    )
+    .join('\n');
+
   const photos: [string, string][] = [
     ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150636/biz_photo/8c13bcf2af8c41b29d6a0affa70f7a-the-closer-shave-biz-photo-05368c4cea2d412387ca715b5f9ee7-booksy.jpeg?size=640x427', 'The Closer Shave shop photo'],
     ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/biz_photo/03ecfaee67954b75be46356faece14-itsrjstyles-biz-photo-71b76fed5ae84af1acc3900904a0df-booksy.jpeg?size=640x427', 'itsrjstyles at work'],
@@ -278,6 +348,11 @@ function shopInfoSections(): string {
     .join('\n');
 
   return `
+<section class="section" id="barbers" aria-label="The barbers">
+  <div class="section-head"><span class="kicker">The chairs</span><h2>Barbers</h2><span class="rule" aria-hidden="true"></span></div>
+  ${roster}
+  <p class="hint">Hours are each barber's own Booksy schedule — a day not listed means they are closed. Profiles link to their live Booksy pages.</p>
+</section>
 <section class="section" id="ratings" aria-label="Ratings and reviews">
   <div class="section-head"><span class="kicker">Word of mouth</span><h2>Ratings &amp; reviews</h2><span class="rule" aria-hidden="true"></span></div>
   <div class="ratings">
@@ -315,7 +390,29 @@ function shopInfoSections(): string {
 </section>`;
 }
 
-export function bookingPage(services: Service[], dates: string[], error?: string): string {
+export function bookingPage(
+  barbers: Barber[],
+  selectedBarberId: string,
+  services: Service[],
+  dates: string[],
+  hoursMap: Map<string, DayWindow[]>,
+  error?: string,
+): string {
+  const barberCards = barbers
+    .map(
+      (b, i) => `<label class="barber-card">
+  <input type="radio" name="barber" value="${escapeHtml(b.id)}"${(selectedBarberId ? b.id === selectedBarberId : i === 0) ? ' checked' : ''}>
+  <span class="barber-top">
+    ${barberPhotoImg(b)}
+    <span style="min-width:0">
+      <span class="barber-name">${escapeHtml(b.name)}</span>
+      <span class="barber-meta" style="display:block"><span class="stars">★ ${b.rating.toFixed(1)}</span> · ${b.review_count} reviews${b.phone ? ` · ${escapeHtml(b.phone)}` : ''}</span>
+    </span>
+  </span>
+</label>`,
+    )
+    .join('\n');
+
   const serviceCards = services
     .map(
       (s, i) => `<label class="service">
@@ -338,19 +435,18 @@ export function bookingPage(services: Service[], dates: string[], error?: string
   const body = `
 ${error ? `<div class="err" role="alert">${escapeHtml(error)}</div>` : ''}
 <form id="bookform" method="POST" action="/api/book">
-<section class="stage" aria-label="Step 1: service">
-  <div class="stage-head"><span class="stage-num" aria-hidden="true">01</span><h2>Service</h2><span class="stage-rule" aria-hidden="true"></span></div>
-  ${serviceCards}
+<section class="stage" aria-label="Step 1: barber">
+  <div class="stage-head"><span class="stage-num" aria-hidden="true">01</span><h2>Barber</h2><span class="stage-rule" aria-hidden="true"></span></div>
+  <div class="barber-grid" id="barberGrid" role="radiogroup" aria-label="Choose your barber">${barberCards}</div>
+  <p class="hint">Hours and prices are each barber's own — pick the chair you want.</p>
 </section>
-<section class="stage" aria-label="Step 2: barber">
-  <div class="stage-head"><span class="stage-num" aria-hidden="true">02</span><h2>Barber</h2><span class="stage-rule" aria-hidden="true"></span></div>
-  <div class="field"><label for="barber">Choose your barber</label><select name="barber" id="barber">
-    <option value="itsrjstyles" selected>itsrjstyles</option>
-  </select><div class="hint">Demo: single barber. Real deployment would list the shop's roster.</div></div>
+<section class="stage" aria-label="Step 2: service">
+  <div class="stage-head"><span class="stage-num" aria-hidden="true">02</span><h2>Service</h2><span class="stage-rule" aria-hidden="true"></span></div>
+  <div id="services">${serviceCards || '<p class="hint">No services listed for this barber.</p>'}</div>
 </section>
 <section class="stage" aria-label="Step 3: day">
   <div class="stage-head"><span class="stage-num" aria-hidden="true">03</span><h2>Day</h2><span class="stage-rule" aria-hidden="true"></span></div>
-  <div class="dates" id="dates">${dateBtns}</div>
+  <div class="dates" id="dates">${dateBtns || '<p class="hint">No bookable days for this barber.</p>'}</div>
 </section>
 <section class="stage" aria-label="Step 4: time">
   <div class="stage-head"><span class="stage-num" aria-hidden="true">04</span><h2>Time</h2><span class="stage-rule" aria-hidden="true"></span></div>
@@ -368,17 +464,29 @@ ${error ? `<div class="err" role="alert">${escapeHtml(error)}</div>` : ''}
   <p class="hint">Demo only: submitting creates a record in the demo database. Email reminders are in demo mode until a mail key is configured.</p>
 </section>
 </form>
-${shopInfoSections()}
+${shopInfoSections(barbers, hoursMap)}
 <script>
 (function(){
-  var datesEl=document.getElementById('dates'),slotsEl=document.getElementById('slots'),
+  var barberGrid=document.getElementById('barberGrid'),servicesEl=document.getElementById('services'),
+      datesEl=document.getElementById('dates'),slotsEl=document.getElementById('slots'),
       dateInput=document.getElementById('dateInput'),slotInput=document.getElementById('slotInput'),
       submitBtn=document.getElementById('submitBtn');
+  function selectedBarber(){var r=document.querySelector('input[name=barber]:checked');return r?r.value:'';}
   function selectedService(){var r=document.querySelector('input[name=service]:checked');return r?r.value:'';}
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function priceHtml(cents){return cents==null?'<span class="tbd">TBD</span>':'$'+Math.round(cents/100);}
+  function serviceCard(s,checked){
+    return '<label class="service"><input type="radio" name="service" value="'+esc(s.slug)+'"'+(checked?' checked':'')+'>'
+      +'<span class="svc-body"><span class="svc-main"><strong>'+esc(s.name)+'</strong>'
+      +'<span class="dots" aria-hidden="true"></span><span class="p">'+priceHtml(s.price_cents)+'</span></span>'
+      +'<span class="svc-sub"><span class="dur">'+s.duration_minutes+' MIN</span>'
+      +(s.description?' · '+esc(s.description):'')+'</span></span></label>';
+  }
   function loadSlots(){
-    var svc=selectedService(),date=dateInput.value;
+    var barber=selectedBarber(),svc=selectedService(),date=dateInput.value;
     slotsEl.innerHTML='<p class="hint">Loading times…</p>';slotInput.value='';submitBtn.disabled=true;submitBtn.textContent='Select a time to continue';
-    fetch('/api/slots?service='+encodeURIComponent(svc)+'&date='+encodeURIComponent(date))
+    if(!barber||!svc||!date){slotsEl.innerHTML='<p class="hint">Pick a barber, service, and day.</p>';return;}
+    fetch('/api/slots?barber='+encodeURIComponent(barber)+'&service='+encodeURIComponent(svc)+'&date='+encodeURIComponent(date))
       .then(function(r){return r.json();})
       .then(function(j){
         if(!j.slots||!j.slots.length){slotsEl.innerHTML='<p class="hint">No times available this day. Try another.</p>';return;}
@@ -395,12 +503,44 @@ ${shopInfoSections()}
       })
       .catch(function(){slotsEl.innerHTML='<p class="hint">Could not load times. Please retry.</p>';});
   }
+  function loadServices(){
+    var barber=selectedBarber();
+    servicesEl.innerHTML='<p class="hint">Loading services…</p>';
+    fetch('/api/services?barber='+encodeURIComponent(barber))
+      .then(function(r){return r.json();})
+      .then(function(j){
+        if(!j.services||!j.services.length){servicesEl.innerHTML='<p class="hint">No services listed for this barber.</p>';return;}
+        servicesEl.innerHTML=j.services.map(function(s,i){return serviceCard(s,i===0);}).join('\n');
+        servicesEl.querySelectorAll('input[name=service]').forEach(function(r){r.addEventListener('change',loadSlots);});
+        loadDates();
+      })
+      .catch(function(){servicesEl.innerHTML='<p class="hint">Could not load services. Please retry.</p>';});
+  }
+  function loadDates(){
+    var barber=selectedBarber();
+    datesEl.innerHTML='<p class="hint">Loading days…</p>';
+    fetch('/api/dates?barber='+encodeURIComponent(barber))
+      .then(function(r){return r.json();})
+      .then(function(j){
+        if(!j.dates||!j.dates.length){datesEl.innerHTML='<p class="hint">No bookable days for this barber.</p>';dateInput.value='';loadSlots();return;}
+        datesEl.innerHTML=j.dates.map(function(d,i){
+          var dt=new Date(d+'T12:00:00Z');
+          var dow=dt.toLocaleDateString('en-US',{timeZone:'America/Los_Angeles',weekday:'short'});
+          var label=dt.toLocaleDateString('en-US',{timeZone:'America/Los_Angeles',month:'short',day:'numeric'});
+          return '<button type="button" class="date-btn'+(i===0?' sel':'')+'" data-date="'+esc(d)+'"><small>'+esc(dow)+'</small><span class="dlabel">'+esc(label)+'</span></button>';
+        }).join('\n');
+        dateInput.value=j.dates[0];
+        loadSlots();
+      })
+      .catch(function(){datesEl.innerHTML='<p class="hint">Could not load days. Please retry.</p>';});
+  }
+  barberGrid.addEventListener('change',function(){loadServices();});
   datesEl.addEventListener('click',function(e){
     var b=e.target.closest('.date-btn');if(!b)return;
     datesEl.querySelectorAll('.date-btn').forEach(function(x){x.classList.remove('sel');});
     b.classList.add('sel');dateInput.value=b.dataset.date;loadSlots();
   });
-  document.querySelectorAll('input[name=service]').forEach(function(r){r.addEventListener('change',loadSlots);});
+  servicesEl.querySelectorAll('input[name=service]').forEach(function(r){r.addEventListener('change',loadSlots);});
   loadSlots();
 })();
 </script>`;
@@ -414,17 +554,22 @@ export function confirmationPage(
   dates: string[],
   whenLabel: string,
   emailNote: string,
+  barber: Barber | null,
 ): string {
   const minDate = dates[0] ?? '';
   const maxDate = dates[dates.length - 1] ?? '';
+  const barberRow = barber
+    ? `<div class="ticket-barber">${barberPhotoImg(barber)}<div><strong>${escapeHtml(barber.name)}</strong><br><span class="hint">★ ${barber.rating.toFixed(1)} · ${barber.review_count} Booksy reviews</span></div></div>`
+    : '';
   const body = `
 <div class="ticket">
   <div class="ticket-head"><div class="k">Appointment ticket</div><h2>You are booked</h2></div>
   <div class="ticket-body">
     <div class="ref">${escapeHtml(booking.id)}</div>
+    ${barberRow}
     <table class="ticket-table">
       <tr><th>Service</th><td>${escapeHtml(serviceName)}</td></tr>
-      <tr><th>Barber</th><td>${escapeHtml(booking.barber)}</td></tr>
+      <tr><th>Barber</th><td>${escapeHtml(barber?.name ?? booking.barber)}</td></tr>
       <tr><th>When</th><td>${escapeHtml(whenLabel)}</td></tr>
       <tr><th>Name</th><td>${escapeHtml(booking.guest_name)}</td></tr>
       <tr><th>Phone</th><td>${escapeHtml(booking.guest_phone)}</td></tr>
@@ -456,10 +601,11 @@ export function confirmationPage(
 (function(){
   var d=document.getElementById('rdate'),s=document.getElementById('rslot'),b=document.getElementById('rbtn');
   var svc=${JSON.stringify(serviceSlug)};
+  var barber=${JSON.stringify(barber?.id ?? '')};
   function load(){
     if(!d.value){s.innerHTML='<option value="">Pick a day first</option>';b.disabled=true;return;}
     s.innerHTML='<option value="">Loading times…</option>';b.disabled=true;
-    fetch('/api/slots?service='+encodeURIComponent(svc)+'&date='+encodeURIComponent(d.value))
+    fetch('/api/slots?barber='+encodeURIComponent(barber)+'&service='+encodeURIComponent(svc)+'&date='+encodeURIComponent(d.value))
       .then(function(r){return r.json();})
       .then(function(j){
         s.innerHTML='';
@@ -489,7 +635,11 @@ export function errorPage(title: string, message: string): string {
   <a class="btn secondary" href="/" style="text-align:center">Back to booking</a>`);
 }
 
-export function adminPage(bookings: (Booking & { service_name: string })[]): string {
+export function adminPage(
+  bookings: (Booking & { service_name: string; barber_name: string })[],
+  barbers: Barber[],
+  selectedBarber: string,
+): string {
   const rows = bookings
     .map((b) => {
       const when = new Date(b.start_ts).toLocaleString('en-US', {
@@ -498,7 +648,7 @@ export function adminPage(bookings: (Booking & { service_name: string })[]): str
       });
       return `<tr>
   <td><strong class="mono">${escapeHtml(b.id)}</strong><br><span class="hint">${escapeHtml(when)}</span></td>
-  <td>${escapeHtml(b.service_name ?? b.service_id)}<br><span class="hint">${escapeHtml(b.barber)}</span></td>
+  <td>${escapeHtml(b.service_name ?? b.service_id)}<br><span class="hint">${escapeHtml(b.barber_name ?? b.barber)}</span></td>
   <td>${escapeHtml(b.guest_name)}<br><span class="hint">${escapeHtml(b.guest_phone)}${b.guest_email ? '<br>' + escapeHtml(b.guest_email) : ''}</span></td>
   <td><form method="POST" action="/admin/cancel" onsubmit="return confirm('Cancel booking ${escapeHtml(b.id)}?')">
     <input type="hidden" name="id" value="${escapeHtml(b.id)}">
@@ -507,9 +657,20 @@ export function adminPage(bookings: (Booking & { service_name: string })[]): str
 </tr>`;
     })
     .join('\n');
+  const filterOptions = barbers
+    .map((b) => `<option value="${escapeHtml(b.id)}"${b.id === selectedBarber ? ' selected' : ''}>${escapeHtml(b.name)}</option>`)
+    .join('\n');
   const body = `<section class="section" aria-label="Admin">
   <div class="section-head"><span class="kicker">Admin</span><h2>Upcoming bookings (${bookings.length})</h2><span class="rule" aria-hidden="true"></span></div>
   <p class="hint">Demo admin: protected by HTTP Basic auth (demo-grade). <a href="/admin/config">Configure services &amp; hours</a></p>
+  <form method="GET" action="/admin" style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+    <label for="barberFilter" style="font-size:13px">Barber</label>
+    <select name="barber" id="barberFilter" onchange="this.form.submit()" style="width:auto">
+      <option value="">All barbers</option>
+      ${filterOptions}
+    </select>
+    ${selectedBarber ? '<a href="/admin" style="font-size:13px">Clear</a>' : ''}
+  </form>
   ${bookings.length ? `<table class="ledger"><tr><th>Booking</th><th>Service</th><th>Guest</th><th></th></tr>${rows}</table>` : '<p class="hint">No upcoming bookings.</p>'}
   </section>`;
   return layout('Admin', body);
@@ -517,40 +678,60 @@ export function adminPage(bookings: (Booking & { service_name: string })[]): str
 
 const DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export function adminConfigPage(services: Service[], hours: ShopHours[], notice?: string): string {
-  const svcRows = services
-    .map(
-      (s) => `<tr>
+export function adminConfigPage(
+  services: Service[],
+  barbers: Barber[],
+  hoursMap: Map<string, DayWindow[]>,
+  notice?: string,
+): string {
+  const svcRow = (s: Service) => `<tr>
   <td><strong>${escapeHtml(s.name)}</strong><br><span class="hint mono">${escapeHtml(s.slug)}</span></td>
   <td><input type="number" name="svc_${escapeHtml(s.id)}_duration" value="${s.duration_minutes}" min="5" max="480" step="5" required aria-label="Duration minutes for ${escapeHtml(s.name)}"></td>
   <td><input type="number" name="svc_${escapeHtml(s.id)}_price" value="${s.price_cents == null ? '' : s.price_cents / 100}" min="0" max="100000" step="1" placeholder="TBD" aria-label="Price dollars for ${escapeHtml(s.name)}"></td>
   <td><input type="checkbox" name="svc_${escapeHtml(s.id)}_active" ${s.is_active ? 'checked' : ''} aria-label="Active: ${escapeHtml(s.name)}"></td>
-</tr>`,
-    )
-    .join('\n');
-  const hourRows = [0, 1, 2, 3, 4, 5, 6]
-    .map((dow) => {
-      const h = hours.find((x) => x.day_of_week === dow);
-      return `<tr>
-  <td>${DOW_NAMES[dow]}</td>
-  <td><input type="time" name="hr_${dow}_open" value="${escapeHtml(h?.open_time ?? '09:00')}" required aria-label="Open time ${DOW_NAMES[dow]}"></td>
-  <td><input type="time" name="hr_${dow}_close" value="${escapeHtml(h?.close_time ?? '18:00')}" required aria-label="Close time ${DOW_NAMES[dow]}"></td>
-  <td><input type="checkbox" name="hr_${dow}_closed" ${h?.is_closed ? 'checked' : ''} aria-label="Closed: ${DOW_NAMES[dow]}"></td>
 </tr>`;
+  const svcSections = barbers
+    .map((b) => {
+      const rows = services
+        .filter((s) => s.barber_id === b.id)
+        .map(svcRow)
+        .join('\n');
+      return `<h3 style="display:flex;align-items:center;gap:10px">${barberPhotoImg(b)} ${escapeHtml(b.name)}</h3>
+      ${rows ? `<table class="ledger"><tr><th>Service</th><th>Minutes</th><th>Price $ (blank = TBD)</th><th>Active</th></tr>${rows}</table>` : '<p class="hint">No services for this barber.</p>'}`;
+    })
+    .join('\n');
+  const windowText = (windows: DayWindow[], dow: number): string =>
+    windows
+      .filter((w) => w.day_of_week === dow)
+      .map((w) => `${w.open_time}-${w.close_time}`)
+      .join(', ');
+  const hourSections = barbers
+    .map((b) => {
+      const windows = hoursMap.get(b.id) ?? [];
+      const rows = [0, 1, 2, 3, 4, 5, 6]
+        .map(
+          (dow) => `<tr>
+  <td>${DOW_NAMES[dow]}</td>
+  <td><input type="text" name="bh_${escapeHtml(b.id)}_${dow}" value="${escapeHtml(windowText(windows, dow))}" placeholder="Closed" pattern="[0-9:, \\-]*" aria-label="Hours for ${escapeHtml(b.name)} on ${DOW_NAMES[dow]} (HH:MM-HH:MM, comma-separated; blank = closed)"></td>
+</tr>`,
+        )
+        .join('\n');
+      return `<h3 style="display:flex;align-items:center;gap:10px">${barberPhotoImg(b)} ${escapeHtml(b.name)}</h3>
+      <table class="ledger"><tr><th>Day</th><th>Windows (HH:MM-HH:MM, comma-separated; blank = closed)</th></tr>${rows}</table>`;
     })
     .join('\n');
   const body = `<section class="section" aria-label="Admin configuration">
-  <div class="section-head"><span class="kicker">Admin</span><h2>Services &amp; hours</h2><span class="rule" aria-hidden="true"></span></div>
+  <div class="section-head"><span class="kicker">Admin</span><h2>Services &amp; barber hours</h2><span class="rule" aria-hidden="true"></span></div>
   <p class="hint"><a href="/admin">Back to bookings</a></p>
   ${notice ? `<div class="ok" role="status">${escapeHtml(notice)}</div>` : ''}
   <form method="POST" action="/admin/config/services">
     <h3>Services</h3>
-    <table class="ledger"><tr><th>Service</th><th>Minutes</th><th>Price $ (blank = TBD)</th><th>Active</th></tr>${svcRows}</table>
+    ${svcSections}
     <button class="btn" type="submit">Save services</button>
   </form>
   <form method="POST" action="/admin/config/hours" style="margin-top:2rem">
-    <h3>Shop hours (America/Los_Angeles)</h3>
-    <table class="ledger"><tr><th>Day</th><th>Opens</th><th>Closes</th><th>Closed</th></tr>${hourRows}</table>
+    <h3>Barber hours (America/Los_Angeles) — a blank day is closed</h3>
+    ${hourSections}
     <button class="btn" type="submit">Save hours</button>
   </form>
   </section>`;
