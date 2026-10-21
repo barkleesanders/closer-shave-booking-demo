@@ -2,9 +2,9 @@
 
 export interface Bindings {
   DB: D1Database;
-  ADMIN_KEY?: string;      // wrangler secret — demo-grade admin gate
+  ADMIN_KEY?: string; // wrangler secret — demo-grade admin gate
   RESEND_API_KEY?: string; // wrangler secret — live email when set
-  EMAIL_FROM?: string;     // wrangler var
+  EMAIL_FROM?: string; // wrangler var
 }
 
 export interface Service {
@@ -22,7 +22,7 @@ export interface Service {
 
 /** One barber's profile, from the barbers table. */
 export interface Barber {
-  id: string;            // stable slug: 'jesse', 'temur', 'juan', 'rj'
+  id: string; // stable slug: 'jesse', 'temur', 'juan', 'rj'
   name: string;
   photo_url: string;
   booksy_url: string;
@@ -53,15 +53,15 @@ export const BARBER_IDS = ['jesse', 'temur', 'juan', 'rj'] as const;
 
 export interface ShopHours {
   day_of_week: number; // 0 = Sunday
-  open_time: string;   // "09:00"
-  close_time: string;  // "18:00"
+  open_time: string; // "09:00"
+  close_time: string; // "18:00"
   is_closed: number;
 }
 
 export interface Booking {
   id: string;
   service_id: string;
-  barber: string;          // legacy display slug; kept populated, equals barber_id
+  barber: string; // legacy display slug; kept populated, equals barber_id
   barber_id: string | null; // FK -> barbers(id); canonical barber reference
   guest_name: string;
   guest_phone: string;
@@ -76,11 +76,11 @@ export interface Booking {
 }
 
 export interface Slot {
-  startTs: number;       // epoch ms UTC
-  endTs: number;         // epoch ms UTC
-  startLabel: string;    // "9:00 AM" in shop tz
-  endLabel: string;      // "9:30 AM"
-  dateLabel: string;     // "Thursday, September 25"
+  startTs: number; // epoch ms UTC
+  endTs: number; // epoch ms UTC
+  startLabel: string; // "9:00 AM" in shop tz
+  endLabel: string; // "9:30 AM"
+  dateLabel: string; // "Thursday, September 25"
 }
 
 export const SHOP_TZ = 'America/Los_Angeles';

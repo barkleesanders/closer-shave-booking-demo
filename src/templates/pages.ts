@@ -2,14 +2,14 @@
 // No build step: interactivity is vanilla JS embedded in the booking page.
 import { escapeHtml } from '../html';
 import {
-  SHOP_ADDRESS,
-  SHOP_NAME,
-  SHOP_PHONE,
-  SHOP_PHONE_LINK,
   type Barber,
   type Booking,
   type DayWindow,
   type Service,
+  SHOP_ADDRESS,
+  SHOP_NAME,
+  SHOP_PHONE,
+  SHOP_PHONE_LINK,
 } from '../types';
 
 const FAVICON =
@@ -286,7 +286,7 @@ ${body}
 
 export function formatPrice(s: Service): string {
   if (s.price_cents == null) return '<span class="tbd">TBD</span>';
-  return '$' + (s.price_cents / 100).toFixed(0);
+  return `${(s.price_cents / 100).toFixed(0)}`;
 }
 
 /** dateStr YYYY-MM-DD -> {dow: "Thu", label: "Sep 25"} rendered in shop tz */
@@ -295,13 +295,22 @@ export function dateChipParts(dateStr: string): { dow: string; label: string } {
   // noon UTC of the calendar day; labels rendered in shop tz via toLocaleDateString
   const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
   return {
-    dow: dt.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short' }),
-    label: dt.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }),
+    dow: dt.toLocaleDateString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      weekday: 'short',
+    }),
+    label: dt.toLocaleDateString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      month: 'short',
+      day: 'numeric',
+    }),
   };
 }
 
-const BOOKSY_SHOP_URL = 'https://booksy.com/en-us/1150636_the-closer-shave_barber-shop_134715_san-francisco';
-const BOOKSY_BARBER_URL = 'https://booksy.com/en-us/1150634_itsrjstyles_barber-shop_134715_san-francisco';
+const BOOKSY_SHOP_URL =
+  'https://booksy.com/en-us/1150636_the-closer-shave_barber-shop_134715_san-francisco';
+const BOOKSY_BARBER_URL =
+  'https://booksy.com/en-us/1150634_itsrjstyles_barber-shop_134715_san-francisco';
 const BOOKSY_BOOK_URL = 'https://theclosershave4159.booksy.com';
 const SHOP_SITE_URL = 'https://theclosershavesf.com';
 const YELP_URL = 'https://www.yelp.com/biz/the-closer-shave-san-francisco-3';
@@ -380,7 +389,9 @@ export function hoursListHtml(windows: DayWindow[]): string {
     const ranges = day.map((w) => `${fmtTime(w.open_time)} – ${fmtTime(w.close_time)}`).join(', ');
     items.push(`<li><span class="dow">${DOW_SHORT[dow]}</span><span>${ranges}</span></li>`);
   }
-  return items.length ? `<ul class="barber-hours" aria-label="Hours">${items.join('')}</ul>` : '<p class="hint">Hours not listed.</p>';
+  return items.length
+    ? `<ul class="barber-hours" aria-label="Hours">${items.join('')}</ul>`
+    : '<p class="hint">Hours not listed.</p>';
 }
 
 /** Real shop content, fetched live 2026-09-24. Ratings link out to the
@@ -401,13 +412,34 @@ function shopInfoSections(barbers: Barber[], hoursMap: Map<string, DayWindow[]>)
     .join('\n');
 
   const photos: [string, string][] = [
-    ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150636/biz_photo/8c13bcf2af8c41b29d6a0affa70f7a-the-closer-shave-biz-photo-05368c4cea2d412387ca715b5f9ee7-booksy.jpeg?size=640x427', 'The Closer Shave shop photo'],
-    ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/biz_photo/03ecfaee67954b75be46356faece14-itsrjstyles-biz-photo-71b76fed5ae84af1acc3900904a0df-booksy.jpeg?size=640x427', 'itsrjstyles at work'],
-    ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/1d10c08414ed471183b02bcb96b5ad-itsrjstyles-inspiration-d67b6bda229744e392a2cb499e6783-booksy.jpeg?size=360x360', 'Work example 1'],
-    ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/98ee272139164319b873565d323186-itsrjstyles-inspiration-c5b745db44c648f1b33dcef2bbbc85-booksy.jpeg?size=360x360', 'Work example 2'],
-    ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/9346377235144f4da73d2329d5233d-itsrjstyles-inspiration-fffab52c23664b8d95a76511d6a3a8-booksy.jpeg?size=360x360', 'Work example 3'],
-    ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/c497b2ba6510453bbd9ed4061d94f6-the-closer-shave-inspiration-17cd216871bc4e29914d82acb28981-booksy.jpeg?size=360x360', 'Work example 4'],
-    ['https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/0b8c308e577a445f874d9dcddc5869-the-closer-shave-inspiration-49d2f22e2fe64b2480df87cc575658-booksy.jpeg?size=360x360', 'Work example 5'],
+    [
+      'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150636/biz_photo/8c13bcf2af8c41b29d6a0affa70f7a-the-closer-shave-biz-photo-05368c4cea2d412387ca715b5f9ee7-booksy.jpeg?size=640x427',
+      'The Closer Shave shop photo',
+    ],
+    [
+      'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/biz_photo/03ecfaee67954b75be46356faece14-itsrjstyles-biz-photo-71b76fed5ae84af1acc3900904a0df-booksy.jpeg?size=640x427',
+      'itsrjstyles at work',
+    ],
+    [
+      'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/1d10c08414ed471183b02bcb96b5ad-itsrjstyles-inspiration-d67b6bda229744e392a2cb499e6783-booksy.jpeg?size=360x360',
+      'Work example 1',
+    ],
+    [
+      'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/98ee272139164319b873565d323186-itsrjstyles-inspiration-c5b745db44c648f1b33dcef2bbbc85-booksy.jpeg?size=360x360',
+      'Work example 2',
+    ],
+    [
+      'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/9346377235144f4da73d2329d5233d-itsrjstyles-inspiration-fffab52c23664b8d95a76511d6a3a8-booksy.jpeg?size=360x360',
+      'Work example 3',
+    ],
+    [
+      'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/c497b2ba6510453bbd9ed4061d94f6-the-closer-shave-inspiration-17cd216871bc4e29914d82acb28981-booksy.jpeg?size=360x360',
+      'Work example 4',
+    ],
+    [
+      'https://d2zdpiztbgorvt.cloudfront.net/region1/us/1150634/inspiration/0b8c308e577a445f874d9dcddc5869-the-closer-shave-inspiration-49d2f22e2fe64b2480df87cc575658-booksy.jpeg?size=360x360',
+      'Work example 5',
+    ],
   ];
   const gallery = photos
     .map(
@@ -722,13 +754,19 @@ export function confirmationPage(
 }
 
 export function cancelledPage(id: string): string {
-  return layout('Booking cancelled', `<div class="ok" role="status">Booking <strong class="mono">${escapeHtml(id)}</strong> is cancelled.</div>
-  <a class="btn" href="/" style="text-align:center">Book a new appointment</a>`);
+  return layout(
+    'Booking cancelled',
+    `<div class="ok" role="status">Booking <strong class="mono">${escapeHtml(id)}</strong> is cancelled.</div>
+  <a class="btn" href="/" style="text-align:center">Book a new appointment</a>`,
+  );
 }
 
 export function errorPage(title: string, message: string): string {
-  return layout(title, `<div class="err" role="alert">${escapeHtml(message)}</div>
-  <a class="btn secondary" href="/" style="text-align:center">Back to booking</a>`);
+  return layout(
+    title,
+    `<div class="err" role="alert">${escapeHtml(message)}</div>
+  <a class="btn secondary" href="/" style="text-align:center">Back to booking</a>`,
+  );
 }
 
 export function adminPage(
@@ -740,12 +778,16 @@ export function adminPage(
     .map((b) => {
       const when = new Date(b.start_ts).toLocaleString('en-US', {
         timeZone: 'America/Los_Angeles',
-        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
       });
       return `<tr>
   <td><strong class="mono">${escapeHtml(b.id)}</strong><br><span class="hint">${escapeHtml(when)}</span></td>
   <td>${escapeHtml(b.service_name ?? b.service_id)}<br><span class="hint">${escapeHtml(b.barber_name ?? b.barber)}</span></td>
-  <td>${escapeHtml(b.guest_name)}<br><span class="hint">${escapeHtml(b.guest_phone)}${b.guest_email ? '<br>' + escapeHtml(b.guest_email) : ''}</span></td>
+  <td>${escapeHtml(b.guest_name)}<br><span class="hint">${escapeHtml(b.guest_phone)}${b.guest_email ? `<br>${escapeHtml(b.guest_email)}` : ''}</span></td>
   <td><form method="POST" action="/admin/cancel" onsubmit="return confirm('Cancel booking ${escapeHtml(b.id)}?')">
     <input type="hidden" name="id" value="${escapeHtml(b.id)}">
     <button class="btn secondary" type="submit" style="padding:10px 14px;font-size:13px;min-height:44px">Cancel</button>
@@ -754,7 +796,10 @@ export function adminPage(
     })
     .join('\n');
   const filterOptions = barbers
-    .map((b) => `<option value="${escapeHtml(b.id)}"${b.id === selectedBarber ? ' selected' : ''}>${escapeHtml(b.name)}</option>`)
+    .map(
+      (b) =>
+        `<option value="${escapeHtml(b.id)}"${b.id === selectedBarber ? ' selected' : ''}>${escapeHtml(b.name)}</option>`,
+    )
     .join('\n');
   const body = `<section class="section" aria-label="Admin">
   <div class="section-head"><span class="kicker">Admin</span><h2>Upcoming bookings (${bookings.length})</h2><span class="rule" aria-hidden="true"></span></div>

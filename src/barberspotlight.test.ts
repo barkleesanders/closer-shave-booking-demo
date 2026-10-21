@@ -42,10 +42,24 @@ const BARBERS: Barber[] = [
 ];
 
 describe('parseBarber gallery_images', () => {
-  const base = { id: 'juan', name: 'Juan Murillo', photo_url: 'p', booksy_url: 'u', phone: null, rating: 5.0, review_count: 61, notes: null, is_active: 1, sort_order: 3 };
+  const base = {
+    id: 'juan',
+    name: 'Juan Murillo',
+    photo_url: 'p',
+    booksy_url: 'u',
+    phone: null,
+    rating: 5.0,
+    review_count: 61,
+    notes: null,
+    is_active: 1,
+    sort_order: 3,
+  };
 
   it('parses a valid JSON array of URLs', () => {
-    const b = parseBarber({ ...base, gallery_images: JSON.stringify(JUAN_GAL) });
+    const b = parseBarber({
+      ...base,
+      gallery_images: JSON.stringify(JUAN_GAL),
+    });
     expect(b.gallery_images).toEqual(JUAN_GAL);
   });
 
@@ -60,7 +74,10 @@ describe('parseBarber gallery_images', () => {
   });
 
   it('drops non-string entries from the array', () => {
-    const b = parseBarber({ ...base, gallery_images: '["https://a/", 42, null, "https://b/"]' });
+    const b = parseBarber({
+      ...base,
+      gallery_images: '["https://a/", 42, null, "https://b/"]',
+    });
     expect(b.gallery_images).toEqual(['https://a/', 'https://b/']);
   });
 });
@@ -95,7 +112,10 @@ describe('bookingPage spotlight wiring', () => {
     // Jesse's gallery must NOT leak into the spotlight panel when Juan is
     // selected (it legitimately lives in the BARBER_DETAIL payload for the
     // client re-render — scoped check on the panel markup only)
-    const panel = html.slice(html.indexOf('id="barberSpotlight"'), html.indexOf('<p class="hint">Hours and prices'));
+    const panel = html.slice(
+      html.indexOf('id="barberSpotlight"'),
+      html.indexOf('<p class="hint">Hours and prices'),
+    );
     for (const u of JESSE_GAL) expect(panel).not.toContain(u);
     expect(panel).toContain(JUAN_GAL[0]);
   });

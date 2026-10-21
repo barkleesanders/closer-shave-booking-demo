@@ -6,19 +6,20 @@
 // ONE SQL statement with a WHERE NOT EXISTS / NOT EXISTS guard, so SQLite
 // executes them with no interleaving — two concurrent writers cannot both
 // win the same slot. A mock would only test itself; this tests the real SQL.
-import { DatabaseSync } from 'node:sqlite';
+
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   getServiceForBarber,
   insertBookingIfFree,
   listBusyRangesExcluding,
+  type NewBooking,
   rescheduleBooking,
   updateBarberHours,
   updateService,
-  type NewBooking,
 } from './db';
 
 /** Minimal D1Database-compatible shim over node:sqlite. */
@@ -71,7 +72,9 @@ class D1Shim {
           return { meta: { changes: Number(r.changes) } };
         },
         first: <T>() => (stmt.get(...(positional(args) as [])) as T | undefined) ?? null,
-        all: <T>() => ({ results: (stmt.all(...(positional(args) as [])) as T[]) ?? [] }),
+        all: <T>() => ({
+          results: (stmt.all(...(positional(args) as [])) as T[]) ?? [],
+        }),
       }),
     };
   }
@@ -113,18 +116,36 @@ describe('insertBookingIfFree (atomic double-booking prevention)', () => {
     // Same window
     expect(await insertBookingIfFree(d, booking({ id: 'CSH-TEST02' }))).toBe(false);
     // Partial overlap (starts inside the first booking)
-    expect(await insertBookingIfFree(d, booking({ id: 'CSH-TEST03', start_ts: 900_000, end_ts: 1_000_100 }))).toBe(false);
+    expect(
+      await insertBookingIfFree(
+        d,
+        booking({ id: 'CSH-TEST03', start_ts: 900_000, end_ts: 1_000_100 }),
+      ),
+    ).toBe(false);
     // Partial overlap (ends inside the first booking)
-    expect(await insertBookingIfFree(d, booking({ id: 'CSH-TEST04', start_ts: 1_001_700, end_ts: 1_100_000 }))).toBe(false);
+    expect(
+      await insertBookingIfFree(
+        d,
+        booking({ id: 'CSH-TEST04', start_ts: 1_001_700, end_ts: 1_100_000 }),
+      ),
+    ).toBe(false);
     // Enclosing window
-    expect(await insertBookingIfFree(d, booking({ id: 'CSH-TEST05', start_ts: 900_000, end_ts: 1_100_000 }))).toBe(false);
+    expect(
+      await insertBookingIfFree(
+        d,
+        booking({ id: 'CSH-TEST05', start_ts: 900_000, end_ts: 1_100_000 }),
+      ),
+    ).toBe(false);
   });
 
   it('allows back-to-back bookings (end == start is not an overlap)', async () => {
     const d = db();
     expect(await insertBookingIfFree(d, booking())).toBe(true);
     expect(
-      await insertBookingIfFree(d, booking({ id: 'CSH-TEST02', start_ts: 1_001_800, end_ts: 1_003_600 })),
+      await insertBookingIfFree(
+        d,
+        booking({ id: 'CSH-TEST02', start_ts: 1_001_800, end_ts: 1_003_600 }),
+      ),
     ).toBe(true);
   });
 
@@ -146,7 +167,10 @@ describe('rescheduleBooking (atomic move)', () => {
   it('refuses a move into a window taken by another booking', async () => {
     const d = db();
     await insertBookingIfFree(d, booking());
-    await insertBookingIfFree(d, booking({ id: 'CSH-TEST02', start_ts: 2_000_000, end_ts: 2_001_800 }));
+    await insertBookingIfFree(
+      d,
+      booking({ id: 'CSH-TEST02', start_ts: 2_000_000, end_ts: 2_001_800 }),
+    );
     expect(await rescheduleBooking(d, 'CSH-TEST01', 'jesse', 2_000_000, 2_001_800)).toBe(false);
   });
 
@@ -166,7 +190,10 @@ describe('multi-barber isolation', () => {
     const d = db();
     expect(await insertBookingIfFree(d, booking())).toBe(true); // jesse
     expect(
-      await insertBookingIfFree(d, booking({ id: 'CSH-TEST02', service_id: 'svc2', barber_id: 'temur' })),
+      await insertBookingIfFree(
+        d,
+        booking({ id: 'CSH-TEST02', service_id: 'svc2', barber_id: 'temur' }),
+      ),
     ).toBe(true); // same slot, other barber — no conflict
     expect(await insertBookingIfFree(d, booking({ id: 'CSH-TEST03' }))).toBe(false); // same slot, jesse — blocked
   });
@@ -177,7 +204,13 @@ describe('multi-barber isolation', () => {
     // Another barber holds the target window; rescheduling jesse's booking there is fine
     await insertBookingIfFree(
       d,
-      booking({ id: 'CSH-TEST02', service_id: 'svc2', barber_id: 'temur', start_ts: 2_000_000, end_ts: 2_001_800 }),
+      booking({
+        id: 'CSH-TEST02',
+        service_id: 'svc2',
+        barber_id: 'temur',
+        start_ts: 2_000_000,
+        end_ts: 2_001_800,
+      }),
     );
     expect(await rescheduleBooking(d, 'CSH-TEST01', 'jesse', 2_000_000, 2_001_800)).toBe(true);
   });
@@ -196,7 +229,10 @@ describe('listBusyRangesExcluding', () => {
   it('excludes the named booking (used for reschedule slot generation)', async () => {
     const d = db();
     await insertBookingIfFree(d, booking());
-    await insertBookingIfFree(d, booking({ id: 'CSH-TEST02', start_ts: 2_000_000, end_ts: 2_001_800 }));
+    await insertBookingIfFree(
+      d,
+      booking({ id: 'CSH-TEST02', start_ts: 2_000_000, end_ts: 2_001_800 }),
+    );
     const busy = await listBusyRangesExcluding(d, 0, 9_999_999, 'CSH-TEST01', 'jesse');
     expect(busy).toHaveLength(1);
     expect(busy[0].start_ts).toBe(2_000_000);
@@ -206,12 +242,24 @@ describe('listBusyRangesExcluding', () => {
 describe('admin config writes', () => {
   it('updateService changes duration, price, and active flag', async () => {
     const d = db();
-    await updateService(d, 'svc1', { duration_minutes: 45, price_cents: null, is_active: 0 });
+    await updateService(d, 'svc1', {
+      duration_minutes: 45,
+      price_cents: null,
+      is_active: 0,
+    });
     const row = (d as unknown as D1Shim)
       .prepare('SELECT duration_minutes, price_cents, is_active FROM services WHERE id = ?1')
       .bind('svc1')
-      .first<{ duration_minutes: number; price_cents: number | null; is_active: number }>();
-    expect(row).toMatchObject({ duration_minutes: 45, price_cents: null, is_active: 0 });
+      .first<{
+        duration_minutes: number;
+        price_cents: number | null;
+        is_active: number;
+      }>();
+    expect(row).toMatchObject({
+      duration_minutes: 45,
+      price_cents: null,
+      is_active: 0,
+    });
   });
 
   it('updateBarberHours replaces the windows for one barber weekday (split shift)', async () => {
@@ -221,7 +269,9 @@ describe('admin config writes', () => {
       { open_time: '17:45', close_time: '21:00' },
     ]);
     const rows = (d as unknown as D1Shim)
-      .prepare('SELECT open_time, close_time FROM barber_hours WHERE barber_id = ?1 AND day_of_week = ?2 ORDER BY window_index ASC')
+      .prepare(
+        'SELECT open_time, close_time FROM barber_hours WHERE barber_id = ?1 AND day_of_week = ?2 ORDER BY window_index ASC',
+      )
       .bind('jesse', 1)
       .all<{ open_time: string; close_time: string }>().results;
     expect(rows).toEqual([

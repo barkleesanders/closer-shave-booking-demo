@@ -21,14 +21,16 @@ app.route('/admin', adminRoutes);
 const buckets = new Map<string, { count: number; reset: number }>();
 app.use('/api/book', async (c, next) => {
   if (c.req.method !== 'POST') return next();
-  const ip =
-    c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'unknown';
+  const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'unknown';
   const now = Date.now();
   const b = buckets.get(ip);
   if (!b || now >= b.reset) {
     buckets.set(ip, { count: 1, reset: now + 60_000 });
   } else if (b.count >= 10) {
-    return c.html(errorPage('Slow down', 'Too many booking attempts — please wait a minute and try again.'), 429);
+    return c.html(
+      errorPage('Slow down', 'Too many booking attempts — please wait a minute and try again.'),
+      429,
+    );
   } else {
     b.count++;
   }

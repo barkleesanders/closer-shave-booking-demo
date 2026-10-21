@@ -29,7 +29,10 @@ export const adminRoutes = new Hono<{ Bindings: Bindings }>();
 adminRoutes.use('*', async (c, next) => {
   const configured = c.env.ADMIN_KEY;
   if (!configured) {
-    return c.html(errorPage('Admin unavailable', 'ADMIN_KEY is not configured on this deployment.'), 503);
+    return c.html(
+      errorPage('Admin unavailable', 'ADMIN_KEY is not configured on this deployment.'),
+      503,
+    );
   }
   const header = c.req.header('authorization') ?? '';
   const m = /^Basic (.+)$/.exec(header);
@@ -88,45 +91,77 @@ adminRoutes.post('/config/services', async (c) => {
     const duration = typeof durRaw === 'string' ? Number(durRaw) : NaN;
     if (!Number.isInteger(duration) || duration < 5 || duration > 480) {
       const fresh = await adminConfigData(c);
-      return c.html(adminConfigPage(fresh.services, fresh.barbers, fresh.hoursMap, `Invalid duration for ${s.name} (5–480 min).`), 400);
+      return c.html(
+        adminConfigPage(
+          fresh.services,
+          fresh.barbers,
+          fresh.hoursMap,
+          `Invalid duration for ${s.name} (5–480 min).`,
+        ),
+        400,
+      );
     }
     let priceCents: number | null = null;
     if (typeof priceRaw === 'string' && priceRaw.trim() !== '') {
       const dollars = Number(priceRaw);
       if (!Number.isFinite(dollars) || dollars < 0 || dollars > 100000) {
         const fresh = await adminConfigData(c);
-        return c.html(adminConfigPage(fresh.services, fresh.barbers, fresh.hoursMap, `Invalid price for ${s.name}.`), 400);
+        return c.html(
+          adminConfigPage(
+            fresh.services,
+            fresh.barbers,
+            fresh.hoursMap,
+            `Invalid price for ${s.name}.`,
+          ),
+          400,
+        );
       }
       priceCents = Math.round(dollars * 100);
     }
     const active = form[`svc_${s.id}_active`] === 'on' ? 1 : 0;
-    await updateService(c.env.DB, s.id, { duration_minutes: duration, price_cents: priceCents, is_active: active });
+    await updateService(c.env.DB, s.id, {
+      duration_minutes: duration,
+      price_cents: priceCents,
+      is_active: active,
+    });
   }
   console.log(JSON.stringify({ msg: 'admin_services_updated', count: services.length }));
   const fresh = await adminConfigData(c);
   return c.html(adminConfigPage(fresh.services, fresh.barbers, fresh.hoursMap, 'Services saved.'));
 });
 
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-
 /** Parse a day's windows from "HH:MM-HH:MM, HH:MM-HH:MM" (blank = closed). */
-export function parseDayWindows(raw: string): { windows: [string, string][]; error?: string } {
+export function parseDayWindows(raw: string): {
+  windows: [string, string][];
+  error?: string;
+} {
   const text = raw.trim();
   if (!text) return { windows: [] };
   const windows: [string, string][] = [];
   for (const part of text.split(',')) {
     const m = /^\s*([01]\d|2[0-3]):([0-5]\d)\s*-\s*([01]\d|2[0-3]):([0-5]\d)\s*$/.exec(part);
-    if (!m) return { windows: [], error: `Bad window "${part.trim()}" — use HH:MM-HH:MM.` };
+    if (!m)
+      return {
+        windows: [],
+        error: `Bad window "${part.trim()}" — use HH:MM-HH:MM.`,
+      };
     const open = `${m[1]}:${m[2]}`;
     const close = `${m[3]}:${m[4]}`;
-    if (open >= close) return { windows: [], error: `Opening time must be before closing time in "${part.trim()}".` };
+    if (open >= close)
+      return {
+        windows: [],
+        error: `Opening time must be before closing time in "${part.trim()}".`,
+      };
     windows.push([open, close]);
   }
   // Windows must not overlap each other.
   const sorted = [...windows].sort();
   for (let i = 1; i < sorted.length; i++) {
     if (sorted[i][0] < sorted[i - 1][1])
-      return { windows: [], error: `Windows overlap: "${sorted[i - 1][0]}-${sorted[i - 1][1]}" and "${sorted[i][0]}-${sorted[i][1]}".` };
+      return {
+        windows: [],
+        error: `Windows overlap: "${sorted[i - 1][0]}-${sorted[i - 1][1]}" and "${sorted[i][0]}-${sorted[i][1]}".`,
+      };
   }
   return { windows };
 }
@@ -140,16 +175,22 @@ async function adminConfigData(c: { env: Bindings }) {
   return { services, barbers, hoursMap };
 }
 
-async function replaceBarberHours(db: D1Database, barberId: string, byDay: Map<number, DayWindow[]>): Promise<void> {
+async function replaceBarberHours(
+  db: D1Database,
+  barberId: string,
+  byDay: Map<number, DayWindow[]>,
+): Promise<void> {
   const stmts: D1PreparedStatement[] = [
     db.prepare('DELETE FROM barber_hours WHERE barber_id = ?1').bind(barberId),
   ];
   for (const [dow, windows] of byDay) {
     windows.forEach((w, i) => {
       stmts.push(
-        db.prepare(
-          'INSERT INTO barber_hours (barber_id, day_of_week, window_index, open_time, close_time) VALUES (?1, ?2, ?3, ?4, ?5)',
-        ).bind(barberId, dow, i, w.open_time, w.close_time),
+        db
+          .prepare(
+            'INSERT INTO barber_hours (barber_id, day_of_week, window_index, open_time, close_time) VALUES (?1, ?2, ?3, ?4, ?5)',
+          )
+          .bind(barberId, dow, i, w.open_time, w.close_time),
       );
     });
   }
@@ -166,15 +207,23 @@ adminRoutes.post('/config/hours', async (c) => {
   for (const b of barbers) {
     const byDay = new Map<number, DayWindow[]>();
     for (let dow = 0; dow < 7; dow++) {
-      const raw = typeof form[`bh_${b.id}_${dow}`] === 'string' ? (form[`bh_${b.id}_${dow}`] as string) : '';
+      const raw =
+        typeof form[`bh_${b.id}_${dow}`] === 'string' ? (form[`bh_${b.id}_${dow}`] as string) : '';
       const { windows, error } = parseDayWindows(raw);
       if (error) {
         const fresh = await adminConfigData(c);
-        return c.html(adminConfigPage(fresh.services, fresh.barbers, fresh.hoursMap, `${b.name}: ${error}`), 400);
+        return c.html(
+          adminConfigPage(fresh.services, fresh.barbers, fresh.hoursMap, `${b.name}: ${error}`),
+          400,
+        );
       }
       byDay.set(
         dow,
-        windows.map(([open_time, close_time]) => ({ day_of_week: dow, open_time, close_time })),
+        windows.map(([open_time, close_time]) => ({
+          day_of_week: dow,
+          open_time,
+          close_time,
+        })),
       );
     }
     parsed.set(b.id, byDay);

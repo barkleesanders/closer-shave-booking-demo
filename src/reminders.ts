@@ -51,28 +51,56 @@ export async function runReminderSweep(env: Bindings): Promise<SweepResult> {
   for (const b of confirmations) {
     result.confirmationsAttempted++;
     try {
-      const r = await sendConfirmationEmail(env, b, await serviceNameFor(env, b), whenLabel(b.start_ts, b.end_ts), await barberNameFor(env, b));
+      const r = await sendConfirmationEmail(
+        env,
+        b,
+        await serviceNameFor(env, b),
+        whenLabel(b.start_ts, b.end_ts),
+        await barberNameFor(env, b),
+      );
       if (r.sent) {
         await markConfirmationSent(env.DB, b.id);
         result.confirmationsSent++;
       }
     } catch (err) {
-      console.error(JSON.stringify({ msg: 'cron_confirmation_error', id: b.id, err: String(err).slice(0, 200) }));
+      console.error(
+        JSON.stringify({
+          msg: 'cron_confirmation_error',
+          id: b.id,
+          err: String(err).slice(0, 200),
+        }),
+      );
     }
   }
 
   const now = Date.now();
-  const reminders = await listPendingReminders(env.DB, now + 23 * 3600 * 1000, now + 25 * 3600 * 1000);
+  const reminders = await listPendingReminders(
+    env.DB,
+    now + 23 * 3600 * 1000,
+    now + 25 * 3600 * 1000,
+  );
   for (const b of reminders) {
     result.remindersAttempted++;
     try {
-      const r = await sendReminderEmail(env, b, await serviceNameFor(env, b), whenLabel(b.start_ts, b.end_ts), await barberNameFor(env, b));
+      const r = await sendReminderEmail(
+        env,
+        b,
+        await serviceNameFor(env, b),
+        whenLabel(b.start_ts, b.end_ts),
+        await barberNameFor(env, b),
+      );
       if (r.sent) {
         await markReminderSent(env.DB, b.id);
         result.remindersSent++;
       }
     } catch (err) {
-      console.error(JSON.stringify({ msg: 'cron_reminder_error', id: b.id, err: String(err).slice(0, 200) }));
+      console.error(
+        JSON.stringify({
+          msg: 'cron_reminder_error',
+          id: b.id,
+          err: String(err).slice(0, 200),
+        }),
+      );
     }
   }
 

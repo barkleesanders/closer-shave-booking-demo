@@ -5,11 +5,11 @@
 
 import {
   BOOKING_DAYS_AHEAD,
+  type DayWindow,
   MIN_LEAD_MINUTES,
   SHOP_TZ,
-  SLOT_STRIDE_MINUTES,
-  type DayWindow,
   type ShopHours,
+  SLOT_STRIDE_MINUTES,
   type Slot,
 } from './types';
 
@@ -34,7 +34,13 @@ const partsFormatter = new Intl.DateTimeFormat('en-US', {
 });
 
 const WEEKDAY_INDEX: Record<string, number> = {
-  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
 };
 
 /** UTC instant -> wall-clock fields as seen in the shop timezone. */
@@ -150,7 +156,11 @@ function overlaps(aStart: number, aEnd: number, busy: BusyRange[]): boolean {
 export function shopHoursToWindows(hours: ShopHours[]): DayWindow[] {
   return hours
     .filter((h) => !h.is_closed)
-    .map((h) => ({ day_of_week: h.day_of_week, open_time: h.open_time, close_time: h.close_time }));
+    .map((h) => ({
+      day_of_week: h.day_of_week,
+      open_time: h.open_time,
+      close_time: h.close_time,
+    }));
 }
 
 /**
@@ -209,7 +219,11 @@ export function generateSlotsForDate(
 }
 
 /** Next N bookable dates (YYYY-MM-DD in shop tz) that have at least one window. */
-export function nextBookableDates(windows: DayWindow[], nowTs: number, count = BOOKING_DAYS_AHEAD): string[] {
+export function nextBookableDates(
+  windows: DayWindow[],
+  nowTs: number,
+  count = BOOKING_DAYS_AHEAD,
+): string[] {
   const today = zonedParts(nowTs);
   const dates: string[] = [];
   for (let i = 0; dates.length < count && i < count + 7; i++) {
