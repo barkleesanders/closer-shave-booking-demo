@@ -22,7 +22,9 @@ export async function getBarberById(db: D1Database, id: string): Promise<Barber 
  * column does not exist, e.g. a database that predates migration 0004).
  * Parse defensively: anything that is not an array of URL strings becomes [].
  */
-type BarberRow = Omit<Barber, 'gallery_images'> & { gallery_images?: string | null };
+type BarberRow = Omit<Barber, 'gallery_images'> & {
+  gallery_images?: string | null;
+};
 
 export function parseBarber(row: BarberRow): Barber {
   let gallery_images: string[] = [];
@@ -62,7 +64,11 @@ export async function listAllBarberHours(db: D1Database): Promise<Map<string, Da
   const map = new Map<string, DayWindow[]>();
   for (const row of res.results ?? []) {
     const arr = map.get(row.barber_id) ?? [];
-    arr.push({ day_of_week: row.day_of_week, open_time: row.open_time, close_time: row.close_time });
+    arr.push({
+      day_of_week: row.day_of_week,
+      open_time: row.open_time,
+      close_time: row.close_time,
+    });
     map.set(row.barber_id, arr);
   }
   return map;
@@ -125,9 +131,7 @@ export async function listBusyRangesExcluding(
 
 /** All services, including inactive (admin view). */
 export async function listAllServices(db: D1Database): Promise<Service[]> {
-  const res = await db
-    .prepare('SELECT * FROM services ORDER BY sort_order ASC')
-    .all<Service>();
+  const res = await db.prepare('SELECT * FROM services ORDER BY sort_order ASC').all<Service>();
   return res.results ?? [];
 }
 
@@ -137,11 +141,7 @@ export interface ServiceConfig {
   is_active: number;
 }
 
-export async function updateService(
-  db: D1Database,
-  id: string,
-  cfg: ServiceConfig,
-): Promise<void> {
+export async function updateService(db: D1Database, id: string, cfg: ServiceConfig): Promise<void> {
   await db
     .prepare(
       `UPDATE services
@@ -171,7 +171,9 @@ export async function updateBarberHours(
   windows: BarberHoursConfig[],
 ): Promise<void> {
   const stmts: D1PreparedStatement[] = [
-    db.prepare('DELETE FROM barber_hours WHERE barber_id = ?1 AND day_of_week = ?2').bind(barberId, dayOfWeek),
+    db
+      .prepare('DELETE FROM barber_hours WHERE barber_id = ?1 AND day_of_week = ?2')
+      .bind(barberId, dayOfWeek),
   ];
   windows.forEach((w, i) => {
     stmts.push(

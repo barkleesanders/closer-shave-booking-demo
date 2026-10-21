@@ -6,7 +6,11 @@ import { generateSlotsForDate, nextBookableDates, wallToUtc } from './availabili
 import { validateInput } from './routes/booking';
 import { BARBER_IDS, type DayWindow } from './types';
 
-const w = (dow: number, open: string, close: string): DayWindow => ({ day_of_week: dow, open_time: open, close_time: close });
+const w = (dow: number, open: string, close: string): DayWindow => ({
+  day_of_week: dow,
+  open_time: open,
+  close_time: close,
+});
 
 // Canonical per-barber hours (Booksy, extracted 2026-09-24):
 const JESSE: DayWindow[] = [w(2, '12:00', '19:00'), w(4, '10:00', '19:00'), w(6, '10:00', '15:00')];
@@ -30,9 +34,12 @@ describe('all four barbers exist and validate', () => {
   it('validateInput accepts each canonical barber', () => {
     for (const b of BARBER_IDS) {
       const raw = {
-        service: 'haircut', barber: b, date: '2026-09-29',
+        service: 'haircut',
+        barber: b,
+        date: '2026-09-29',
         slotStart: String(wallToUtc(2026, 9, 29, 13, 0)),
-        name: 'X', phone: '(415) 555-0100',
+        name: 'X',
+        phone: '(415) 555-0100',
       };
       const { errors } = validateInput(raw, BARBER_IDS);
       expect(errors.map((e) => e.field)).not.toContain('barber');

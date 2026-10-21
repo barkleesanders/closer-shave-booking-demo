@@ -34,13 +34,20 @@ async function sendEmail(
         body_bytes: html.length,
       }),
     );
-    return { sent: false, demoMode: true, reason: 'RESEND_API_KEY not set — demo mode' };
+    return {
+      sent: false,
+      demoMode: true,
+      reason: 'RESEND_API_KEY not set — demo mode',
+    };
   }
   const from = env.EMAIL_FROM || 'The Closer Shave (demo) <demo@localhost>';
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ from, to: [to], subject, html }),
     });
     if (!res.ok) {
@@ -54,21 +61,44 @@ async function sendEmail(
           body: body.slice(0, 300),
         }),
       );
-      return { sent: false, demoMode: false, reason: `Resend HTTP ${res.status}` };
+      return {
+        sent: false,
+        demoMode: false,
+        reason: `Resend HTTP ${res.status}`,
+      };
     }
-    console.log(JSON.stringify({ msg: 'email_sent', booking: bookingId, has_recipient: true }));
+    console.log(
+      JSON.stringify({
+        msg: 'email_sent',
+        booking: bookingId,
+        has_recipient: true,
+      }),
+    );
     return { sent: true, demoMode: false, reason: 'sent via Resend' };
   } catch (err) {
     console.error(
-      JSON.stringify({ msg: 'email_send_error', booking: bookingId, err: String(err).slice(0, 200) }),
+      JSON.stringify({
+        msg: 'email_send_error',
+        booking: bookingId,
+        err: String(err).slice(0, 200),
+      }),
     );
-    return { sent: false, demoMode: false, reason: `transport error: ${String(err).slice(0, 120)}` };
+    return {
+      sent: false,
+      demoMode: false,
+      reason: `transport error: ${String(err).slice(0, 120)}`,
+    };
   }
 }
 
 const SHOP_LINE = 'The Closer Shave · 411A Brannan St, San Francisco, CA 94107 · (415) 465-5915';
 
-function bookingSummary(b: Booking, serviceName: string, whenLabel: string, barberName?: string): string {
+function bookingSummary(
+  b: Booking,
+  serviceName: string,
+  whenLabel: string,
+  barberName?: string,
+): string {
   const who = barberName || b.barber;
   return `<p style="font-size:16px">Hi ${esc(b.guest_name)},</p>
 <p>Your appointment at <strong>${SHOP_NAME_ESC}</strong> is confirmed:</p>
@@ -99,7 +129,11 @@ export async function sendConfirmationEmail(
   barberName?: string,
 ): Promise<SendResult> {
   if (!booking.guest_email) {
-    return { sent: false, demoMode: !emailEnabled(env), reason: 'no guest email on booking' };
+    return {
+      sent: false,
+      demoMode: !emailEnabled(env),
+      reason: 'no guest email on booking',
+    };
   }
   return sendEmail(
     env,
@@ -118,7 +152,11 @@ export async function sendReminderEmail(
   barberName?: string,
 ): Promise<SendResult> {
   if (!booking.guest_email) {
-    return { sent: false, demoMode: !emailEnabled(env), reason: 'no guest email on booking' };
+    return {
+      sent: false,
+      demoMode: !emailEnabled(env),
+      reason: 'no guest email on booking',
+    };
   }
   const who = barberName || booking.barber;
   return sendEmail(

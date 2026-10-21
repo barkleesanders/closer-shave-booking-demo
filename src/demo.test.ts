@@ -35,7 +35,14 @@ describe('zoned time helpers', () => {
   it('round-trips wall clock through UTC in the shop timezone', () => {
     const ts = wallToUtc(2026, 9, 25, 9, 30);
     const p = zonedParts(ts);
-    expect(p).toMatchObject({ year: 2026, month: 9, day: 25, hour: 9, minute: 30, weekday: 5 });
+    expect(p).toMatchObject({
+      year: 2026,
+      month: 9,
+      day: 25,
+      hour: 9,
+      minute: 30,
+      weekday: 5,
+    });
   });
 
   it('handles a DST-boundary date without throwing', () => {
@@ -47,9 +54,20 @@ describe('zoned time helpers', () => {
   it('resolves the 1st of a month to the right month (not the prior month)', () => {
     // Regression: the old day-of-month-only convergence landed 2026-10-01 on
     // 2026-09-01, making every 1st-of-month unbookable.
-    for (const [y, m] of [[2026, 10], [2026, 11], [2026, 12], [2027, 1]] as const) {
+    for (const [y, m] of [
+      [2026, 10],
+      [2026, 11],
+      [2026, 12],
+      [2027, 1],
+    ] as const) {
       const ts = wallToUtc(y, m, 1, 9, 30);
-      expect(zonedParts(ts)).toMatchObject({ year: y, month: m, day: 1, hour: 9, minute: 30 });
+      expect(zonedParts(ts)).toMatchObject({
+        year: y,
+        month: m,
+        day: 1,
+        hour: 9,
+        minute: 30,
+      });
     }
     expect(isDateInWindow('2026-10-01', NOON_THU)).toBe(true);
   });
@@ -59,12 +77,18 @@ describe('zoned time helpers', () => {
     // 2026-09-25 would miss it; the shop-local window must contain it.
     const bounds = localDayBounds('2026-09-25');
     expect(bounds).not.toBeNull();
+    if (!bounds) throw new Error('Expected valid local day bounds');
     const evening = wallToUtc(2026, 9, 25, 19, 0);
-    expect(evening).toBeGreaterThanOrEqual(bounds!.start);
-    expect(evening).toBeLessThan(bounds!.end);
+    expect(evening).toBeGreaterThanOrEqual(bounds.start);
+    expect(evening).toBeLessThan(bounds.end);
     // Exactly 24h wide, start is local midnight
-    expect(bounds!.end - bounds!.start).toBe(24 * 60 * 60 * 1000);
-    expect(zonedParts(bounds!.start)).toMatchObject({ month: 9, day: 25, hour: 0, minute: 0 });
+    expect(bounds.end - bounds.start).toBe(24 * 60 * 60 * 1000);
+    expect(zonedParts(bounds.start)).toMatchObject({
+      month: 9,
+      day: 25,
+      hour: 0,
+      minute: 0,
+    });
     expect(localDayBounds('2026-02-30')).toBeNull();
   });
 });
@@ -106,7 +130,12 @@ describe('generateSlotsForDate', () => {
   });
 
   it('excludes slots overlapping an existing booking', () => {
-    const busy = [{ start_ts: wallToUtc(2026, 9, 25, 11, 0), end_ts: wallToUtc(2026, 9, 25, 11, 30) }];
+    const busy = [
+      {
+        start_ts: wallToUtc(2026, 9, 25, 11, 0),
+        end_ts: wallToUtc(2026, 9, 25, 11, 30),
+      },
+    ];
     const slots = generateSlotsForDate('2026-09-25', WIN, 30, busy, NOON_THU);
     const labels = slots.map((s) => s.startLabel);
     // A 30-min service overlapping 11:00–11:30 blocks starts 10:45, 11:00, 11:15
@@ -143,13 +172,7 @@ describe('nextBookableDates', () => {
     }));
     const now = wallToUtc(2026, 9, 30, 12, 0);
     const dates = nextBookableDates(shopHoursToWindows(allOpen), now, 5);
-    expect(dates).toEqual([
-      '2026-09-30',
-      '2026-10-01',
-      '2026-10-02',
-      '2026-10-03',
-      '2026-10-04',
-    ]);
+    expect(dates).toEqual(['2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']);
   });
 });
 
@@ -187,16 +210,19 @@ describe('validateInput', () => {
   });
 
   it('rejects missing service, unknown barber, bad phone, bad email, no slot', () => {
-    const { errors } = validateInput({
-      service: '',
-      barber: 'someone-else',
-      date: '2026-09-25',
-      slotStart: '0',
-      name: '',
-      phone: '123',
-      email: 'not-an-email',
-      notes: '',
-    }, BARBER_IDS);
+    const { errors } = validateInput(
+      {
+        service: '',
+        barber: 'someone-else',
+        date: '2026-09-25',
+        slotStart: '0',
+        name: '',
+        phone: '123',
+        email: 'not-an-email',
+        notes: '',
+      },
+      BARBER_IDS,
+    );
     const fields = errors.map((e) => e.field);
     expect(fields).toContain('service');
     expect(fields).toContain('barber');
@@ -231,7 +257,12 @@ describe('email seam', () => {
   it('reports demo mode when no Resend key is configured', async () => {
     const env = {} as Bindings;
     expect(emailEnabled(env)).toBe(false);
-    const r = await sendConfirmationEmail(env, booking, 'Haircut', 'Friday, September 25, 10:00 AM PT');
+    const r = await sendConfirmationEmail(
+      env,
+      booking,
+      'Haircut',
+      'Friday, September 25, 10:00 AM PT',
+    );
     expect(r.sent).toBe(false);
     expect(r.demoMode).toBe(true);
   });
