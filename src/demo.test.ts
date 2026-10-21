@@ -10,8 +10,9 @@ import {
   wallToUtc,
   zonedParts,
 } from './availability';
+import { generateBookingId, isBookingId } from './booking-id';
 import { emailEnabled, sendConfirmationEmail } from './email';
-import { generateBookingId, validateInput } from './routes/booking';
+import { validateInput } from './routes/booking';
 import { BARBER_IDS, type Bindings, type Booking, type ShopHours } from './types';
 
 // Real canonical hours (Booksy shop listing 1150636, fetched 2026-09-24):
@@ -239,10 +240,17 @@ describe('validateInput', () => {
 });
 
 describe('generateBookingId', () => {
-  it('produces CSH- prefixed, unambiguous IDs', () => {
+  it('produces CSH- prefixed UUID references', () => {
     const ids = new Set(Array.from({ length: 200 }, generateBookingId));
     expect(ids.size).toBe(200); // no collisions in 200 draws
-    for (const id of ids) expect(id).toMatch(/^CSH-[A-Z0-9]{6}$/);
+    for (const id of ids) expect(id).toMatch(/^CSH-[0-9A-F]{32}$/);
+  });
+  it('accepts saved legacy references and rejects malformed values', () => {
+    expect(isBookingId('CSH-ABC123')).toBe(true);
+    expect(isBookingId(generateBookingId())).toBe(true);
+    expect(isBookingId('CSH-123')).toBe(false);
+    expect(isBookingId('CSH-ABC123<script>')).toBe(false);
+    expect(isBookingId(`CSH-${'G'.repeat(32)}`)).toBe(false);
   });
 });
 

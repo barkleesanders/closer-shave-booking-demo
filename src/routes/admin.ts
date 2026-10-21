@@ -4,6 +4,7 @@
 // URL, so they don't leak into history, referrers, or server logs.
 // Demo-grade auth: fine for a concept demo, not for real customer data.
 import { Hono } from 'hono';
+import { isBookingId } from '../booking-id';
 import {
   cancelBooking,
   getBarberById,
@@ -65,7 +66,7 @@ adminRoutes.get('/', async (c) => {
 adminRoutes.post('/cancel', async (c) => {
   const form = await c.req.parseBody();
   const id = typeof form.id === 'string' ? form.id : '';
-  if (!/^CSH-[A-Z0-9]{6}$/.test(id)) {
+  if (!isBookingId(id)) {
     return c.html(errorPage('Bad request', 'Invalid booking reference.'), 400);
   }
   const ok = await cancelBooking(c.env.DB, id);

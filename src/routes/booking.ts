@@ -7,6 +7,7 @@ import {
   localDayBounds,
   nextBookableDates,
 } from '../availability';
+import { generateBookingId, isBookingId } from '../booking-id';
 import {
   getBarberById,
   getBooking,
@@ -77,14 +78,6 @@ export function validateInput(
       message: 'Enter a valid email address, or leave it blank.',
     });
   return { input, errors };
-}
-
-export function generateBookingId(): string {
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no ambiguous chars
-  const bytes = crypto.getRandomValues(new Uint8Array(6));
-  let s = '';
-  for (const b of bytes) s += alphabet[b % alphabet.length];
-  return `CSH-${s}`;
 }
 
 export function whenLabel(startTs: number, endTs: number): string {
@@ -276,8 +269,7 @@ bookingRoutes.post('/api/book', async (c) => {
 
 bookingRoutes.get('/book/:id', async (c) => {
   const id = c.req.param('id');
-  if (!/^CSH-[A-Z0-9]{6}$/.test(id))
-    return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
+  if (!isBookingId(id)) return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
   const booking = await getBooking(c.env.DB, id);
   if (!booking || booking.status === 'cancelled')
     return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
@@ -313,8 +305,7 @@ bookingRoutes.get('/book/:id', async (c) => {
 /** Move a confirmed booking to a new day/time. Atomic single-statement move. */
 bookingRoutes.post('/book/:id/reschedule', async (c) => {
   const id = c.req.param('id');
-  if (!/^CSH-[A-Z0-9]{6}$/.test(id))
-    return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
+  if (!isBookingId(id)) return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
   const booking = await getBooking(c.env.DB, id);
   if (!booking || booking.status === 'cancelled' || !booking.barber_id)
     return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
@@ -370,8 +361,7 @@ bookingRoutes.post('/book/:id/reschedule', async (c) => {
 /** Cancel a confirmed booking from its confirmation page. */
 bookingRoutes.post('/book/:id/cancel', async (c) => {
   const id = c.req.param('id');
-  if (!/^CSH-[A-Z0-9]{6}$/.test(id))
-    return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
+  if (!isBookingId(id)) return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);
   const { cancelBooking } = await import('../db');
   const ok = await cancelBooking(c.env.DB, id);
   if (!ok) return c.html(errorPage('Not found', 'Unknown booking reference.'), 404);

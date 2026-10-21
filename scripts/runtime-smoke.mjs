@@ -89,7 +89,7 @@ try {
   const booked = await request('/api/book', { method: 'POST', body: body(), redirect: 'manual' });
   assert.equal(booked.status, 303);
   const location = booked.headers.get('location');
-  assert.match(location, /^\/book\/CSH-[A-Z0-9]{6}$/);
+  assert.match(location, /^\/book\/CSH-[0-9A-F]{32}$/);
   assert.equal(
     (await request('/api/book', { method: 'POST', body: body(), redirect: 'manual' })).status,
     409,
@@ -108,6 +108,12 @@ try {
     .bind(location.split('/').at(-1))
     .first();
   assert.equal(row.status, 'cancelled');
+  await db
+    .prepare("UPDATE bookings SET id='CSH-OLD001', status='confirmed' WHERE id=?")
+    .bind(location.split('/').at(-1))
+    .run();
+  assert.equal((await request('/book/CSH-OLD001')).status, 200);
+  assert.equal((await request('/book/CSH-OLD001/cancel', { method: 'POST' })).status, 200);
   assert.equal(outbound, 0);
   console.log(
     JSON.stringify({
@@ -123,6 +129,7 @@ try {
         'duplicate rejection',
         'confirmation',
         'cancellation',
+        'saved legacy reference compatibility',
       ],
       externalRequests: outbound,
     }),
