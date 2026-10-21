@@ -37,12 +37,8 @@ Workers + D1 (Hono, TypeScript, zero build step for the frontend).
   (Re-verified 2026-09-24: the shop listing's static render shows
   "No Reviews Yet..." for review text while still reporting 5.0 / 319 reviews
   in aggregate.)
-- Data nuance (found during verification, not yet changed): the demo's
-  availability grid uses the SHOP listing hours, but the BARBER listing
-  (itsrjstyles) shows narrower hours — Sun/Sat 12:00–17:00, Tue/Fri
-  12:00–20:00, Thu 12:00–20:30. Since booking is with the barber, per-barber
-  hours would be more accurate; the seed currently uses shop hours. Open
-  decision for the shop owner.
+- Availability is scoped to each barber's `barber_hours` rows. The shop-hours
+  table is retained for display; it does not determine bookable slots.
 - Photos hotlink the shop's public Booksy CDN images, attributed on-page.
 
 Do not contact the shop. No real branding assets beyond the factual name,
@@ -51,17 +47,21 @@ address, phone, barber name, and public prices.
 ## Develop
 
 ```bash
-npm install
+npm ci              # Node 22.22 or newer
+npm run verify      # lint, types, tests, real workerd/D1 smoke, dependency audit
 npm run typecheck   # tsc --noEmit
 npm test            # vitest
 npm run dev         # wrangler dev (local)
 ```
 
-Local D1 test:
+The runtime smoke check applies every migration and the barber seed to an
+isolated local D1 database, then exercises booking, duplicate rejection,
+confirmation, cancellation and admin access without making external requests.
+For manual local development:
 
 ```bash
-npx wrangler d1 execute closer-shave-booking --local --file migrations/0001_schema.sql
-npx wrangler d1 execute closer-shave-booking --local --file migrations/0002_seed.sql
+npx wrangler d1 migrations apply closer-shave-booking --local -c ./wrangler.toml
+npx wrangler d1 execute closer-shave-booking --local -c ./wrangler.toml --file seeds/barbers.sql
 npm run dev
 # open http://localhost:8787 — book, confirm, cancel via /admin
 ```
