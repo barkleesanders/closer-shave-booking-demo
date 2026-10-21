@@ -140,8 +140,16 @@ describe('bookingPage spotlight wiring', () => {
     // Regression: PHOTO_FALLBACK contains single quotes, so it must be
     // embedded via JSON.stringify, never raw inside '...'.
     const html = bookingPage(BARBERS, 'jesse', [], [], new Map());
-    const blocks = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-    expect(blocks.length).toBeGreaterThan(0);
-    for (const b of blocks) expect(() => new Function(b)).not.toThrow();
+    for (const variant of [
+      html,
+      html.replaceAll('<script>', '<SCRIPT>').replaceAll('</script>', '</SCRIPT>'),
+    ]) {
+      // Extract trusted generated scripts for syntax checks, never sanitize HTML.
+      const blocks = [...variant.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)].map(
+        (m) => m[1],
+      );
+      expect(blocks.length).toBeGreaterThan(0);
+      for (const b of blocks) expect(() => new Function(b)).not.toThrow();
+    }
   });
 });
