@@ -143,9 +143,10 @@ describe('bookingPage spotlight wiring', () => {
     for (const variant of [
       html,
       html.replaceAll('<script>', '<SCRIPT>').replaceAll('</script>', '</SCRIPT>'),
+      html.replaceAll('</script>', '</script\t\n bar>'),
     ]) {
       // Extract trusted generated scripts for syntax checks, never sanitize HTML.
-      const blocks = [...variant.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)].map(
+      const blocks = [...variant.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)].map(
         (m) => m[1],
       );
       expect(blocks.length).toBeGreaterThan(0);
