@@ -145,8 +145,11 @@ bookingRoutes.get('/api/slots', async (c) => {
 
   const bounds = localDayBounds(date);
   if (!bounds) return c.json({ error: 'Invalid date.' }, 400);
-  const busy = await listBookingsInRange(c.env.DB, bounds.start, bounds.end, barberId);
-  const hours = await listBarberHours(c.env.DB, barberId);
+  // Independent reads (bookings in range + the barber's hours) in parallel.
+  const [busy, hours] = await Promise.all([
+    listBookingsInRange(c.env.DB, bounds.start, bounds.end, barberId),
+    listBarberHours(c.env.DB, barberId),
+  ]);
   const slots = generateSlotsForDate(date, hours, service.duration_minutes, busy, Date.now());
   return c.json({ slots });
 });
@@ -182,8 +185,11 @@ bookingRoutes.post('/api/book', async (c) => {
   // valid slot for THIS barber (never trust the client).
   const bounds = localDayBounds(input.date);
   if (!bounds) return repage('Invalid date.', 400);
-  const busy = await listBookingsInRange(c.env.DB, bounds.start, bounds.end, input.barberId);
-  const hours = await listBarberHours(c.env.DB, input.barberId);
+  // Independent reads (bookings in range + the barber's hours) in parallel.
+  const [busy, hours] = await Promise.all([
+    listBookingsInRange(c.env.DB, bounds.start, bounds.end, input.barberId),
+    listBarberHours(c.env.DB, input.barberId),
+  ]);
   const validStarts = new Set(
     generateSlotsForDate(input.date, hours, service.duration_minutes, busy, Date.now()).map(
       (s) => s.startTs,
@@ -326,14 +332,11 @@ bookingRoutes.post('/book/:id/reschedule', async (c) => {
   // always within the booking's barber's hours.
   const bounds = localDayBounds(date);
   if (!bounds) return c.html(errorPage('Reschedule failed', 'Invalid date.'), 400);
-  const busy = await listBusyRangesExcluding(
-    c.env.DB,
-    bounds.start,
-    bounds.end,
-    id,
-    booking.barber_id,
-  );
-  const hours = await listBarberHours(c.env.DB, booking.barber_id);
+  // Independent reads (busy ranges + the barber's hours) in parallel.
+  const [busy, hours] = await Promise.all([
+    listBusyRangesExcluding(c.env.DB, bounds.start, bounds.end, id, booking.barber_id),
+    listBarberHours(c.env.DB, booking.barber_id),
+  ]);
   const validStarts = new Set(
     generateSlotsForDate(date, hours, service.duration_minutes, busy, Date.now()).map(
       (s) => s.startTs,
