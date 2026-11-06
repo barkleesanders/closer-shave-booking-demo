@@ -12,6 +12,30 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 app.use(secureHeaders());
 
+// Cache layering (Lockyer Rules 5-6). Public catalog-style GETs (barbers,
+// services, bookable dates) change only when an admin edits config, so they
+// get a short shared-cache policy. Everything else is deliberately NOT
+// publicly cached: /api/slots is live availability, /book/:id carries guest
+// details, /admin/* is authenticated, and every POST mutates state — those
+// get an explicit private, no-store. Only 200 GET responses gain a public
+// policy; errors and redirects stay no-store.
+const CACHE_PUBLIC_SHORT = 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600';
+const CACHE_PAGE = 'public, max-age=0, s-maxage=60, stale-while-revalidate=300';
+const CACHE_NO_STORE = 'private, no-store';
+app.use('*', async (c, next) => {
+  await next();
+  if (c.res.headers.has('Cache-Control')) return;
+  const path = new URL(c.req.url).pathname;
+  const isGet = c.req.method === 'GET';
+  let value = CACHE_NO_STORE;
+  if (isGet && c.res.status === 200) {
+    if (path === '/') value = CACHE_PAGE;
+    else if (path === '/api/barbers' || path === '/api/services' || path === '/api/dates')
+      value = CACHE_PUBLIC_SHORT;
+  }
+  c.header('Cache-Control', value);
+});
+
 // Admin auth routes must not exist here; /admin/* is Basic-auth gated in adminRoutes.
 app.route('/admin', adminRoutes);
 
