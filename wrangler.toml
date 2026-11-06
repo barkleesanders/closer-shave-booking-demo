@@ -5,6 +5,18 @@ compatibility_date = "2026-09-01"
 # Workers Logs — view with `wrangler tail` or in the Cloudflare dashboard
 [observability]
 enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+persist = true
+head_sampling_rate = 1
 
 # Reminders: every 30 minutes the scheduled() handler sends booking
 # confirmations not yet sent and 24h SMS/email reminders via the Resend seam.
