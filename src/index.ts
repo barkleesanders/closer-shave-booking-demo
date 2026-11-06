@@ -26,7 +26,8 @@ app.use('*', async (c, next) => {
   await next();
   if (c.res.headers.has('Cache-Control')) return;
   const path = new URL(c.req.url).pathname;
-  const isGet = c.req.method === 'GET';
+  // HEAD mirrors GET for cache policy (monitors and curl -I use it).
+  const isGet = c.req.method === 'GET' || c.req.method === 'HEAD';
   let value = CACHE_NO_STORE;
   if (isGet && c.res.status === 200) {
     if (path === '/') value = CACHE_PAGE;
