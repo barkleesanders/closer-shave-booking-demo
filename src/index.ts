@@ -7,8 +7,14 @@ import { adminRoutes } from './routes/admin';
 import { bookingRoutes } from './routes/booking';
 import { errorPage } from './templates/pages';
 import type { Bindings } from './types';
+import { wideEvent } from './wide-event';
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// Wide-event logging — outermost middleware, one JSON http_request event
+// per request to Workers Logs (see src/wide-event.ts). It also owns the
+// per-request D1 query counter behind db_queries / db_batches.
+app.use('*', wideEvent);
 
 app.use(secureHeaders());
 
