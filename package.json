@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "hono": "^4.13.13"
+    "hono": "^4.13.16"
   },
   "description": "Unofficial concept demo: Workers-native barber booking for The Closer Shave (SF). Hono + D1, no build step for the frontend.",
   "devDependencies": {
