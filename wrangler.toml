@@ -2,6 +2,11 @@ name = "closer-shave-booking-demo"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 
+# Serve on closer-shave-booking-demo.barkleesanders.workers.dev (explicit, so a
+# config-driven deploy can never leave the subdomain disabled).
+workers_dev = true
+preview_urls = false
+
 # Workers Logs — view with `wrangler tail` or in the Cloudflare dashboard
 [observability]
 enabled = true

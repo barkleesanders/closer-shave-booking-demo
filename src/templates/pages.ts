@@ -260,6 +260,7 @@ function layout(title: string, body: string): string {
 <link rel="icon" href="${FAVICON}">
 ${FONTS}
 <style>${CSS}</style>
+<script defer src="https://analytics-collect.aivaclaims.com/t.js" data-site="pb_live_r7isksmgwmjeam1jl6rdiz4u"></script>
 </head>
 <body>
 <a class="skip" href="#bookform">Skip to booking</a>
